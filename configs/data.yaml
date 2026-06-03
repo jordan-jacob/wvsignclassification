@@ -1,0 +1,56 @@
+# Combined paths; LISA class taxonomy.
+# For MTSD pre-training use configs/mtsd.yaml — its labels differ.
+path: C:\Users\jrj00048\Projects\wvsignclassification\data\processed
+train:
+  - lisa/train/images
+  - mtsd/train/images
+val: mtsd/val/images
+nc: 47
+names:
+  - addedLane
+  - curveRight
+  - dip
+  - intersection
+  - laneEnds
+  - merge
+  - pedestrianCrossing
+  - signalAhead
+  - slow
+  - stopAhead
+  - thruMergeLeft
+  - thruMergeRight
+  - turnLeft
+  - turnRight
+  - yieldAhead
+  - doNotPass
+  - keepRight
+  - rightLaneMustTurn
+  - speedLimit15
+  - speedLimit25
+  - speedLimit30
+  - speedLimit35
+  - speedLimit40
+  - speedLimit45
+  - speedLimit50
+  - speedLimit55
+  - speedLimit65
+  - truckSpeedLimit55
+  - speedLimitUrdbl
+  - curveLeft
+  - doNotEnter
+  - noLeftTurn
+  - noRightTurn
+  - rampSpeedAdvisory20
+  - rampSpeedAdvisory35
+  - rampSpeedAdvisory40
+  - rampSpeedAdvisory45
+  - rampSpeedAdvisory50
+  - rampSpeedAdvisoryUrdbl
+  - roundabout
+  - school
+  - schoolSpeedLimit25
+  - stop
+  - thruTrafficMergeLeft
+  - yield
+  - zoneAhead25
+  - zoneAhead45

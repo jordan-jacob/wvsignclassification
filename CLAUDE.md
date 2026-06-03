@@ -15,7 +15,7 @@ using computer vision and image segmentation on dashcam video from WVDOH.
 
 ## Data locations (local, not in repo)
 - LISA (Kaggle mirror, 47 classes, CSV annotations): data/lisa/
-- MTSD (fully annotated, ~52K images, COCO-style JSON): data/mtsd/
+- MTSD (fully annotated, ~52K images, per-image JSON): data/mtsd/
 - WVDOH dashcam footage: not yet received
 
 ## Key design decisions
