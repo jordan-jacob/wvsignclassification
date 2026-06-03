@@ -1,5 +1,50 @@
 # CLAUDE.md
 
+# WV Roadway Sign Detection — Project Context
+
+## Goal
+Detect missing, obscured, and damaged roadway signs on West Virginia roads
+using computer vision and image segmentation on dashcam video from WVDOH.
+
+## Pipeline (planned)
+1. Pre-train backbone on MTSD (global, binary detection)
+2. Fine-tune classification head on MTSD North America + LISA (47 MUTCD classes)
+3. Fine-tune on WVDOH dashcam footage (pending data delivery)
+4. Spatial post-processing layer over WV road network graph (STGAN-style)
+   to flag segments where expected signs are absent or undetected
+
+## Data locations (local, not in repo)
+- LISA (Kaggle mirror, 47 classes, CSV annotations): data/lisa/
+- MTSD (fully annotated, ~52K images, COCO-style JSON): data/mtsd/
+- WVDOH dashcam footage: not yet received
+
+## Key design decisions
+- Backbone: ResNet-50, ImageNet init
+- Detector: YOLOv8 (target) — pipeline validated with LISA first
+- No ordinal contrastive loss (sign classes are discrete/unordered)
+- Standard SupCon may be used for occlusion-robust embeddings
+- Geographic filtering of MTSD: NOT applied at pre-training;
+  US label remapping applied at classification head training only
+
+## Repo structure
+scripts/        training and eval scripts
+notebooks/      EDA and visualization
+configs/        YAML configs for data paths and hyperparameters
+data/           symlinks to local data (gitignored)
+checkpoints/    model weights (gitignored)
+
+## Commands
+# Install deps
+pip install -r requirements.txt
+
+# Explore LISA annotations
+python scripts/explore_lisa.py
+
+# Pre-train on MTSD (Phase 1)
+python scripts/pretrain_mtsd.py --config configs/pretrain.yaml
+
+### general rules
+
 ## 1. Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
