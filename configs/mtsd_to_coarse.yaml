@@ -1,0 +1,28 @@
+# MTSD 401-class → 5 coarse-class mapping.
+# Rules applied in order; first match wins; unmatched → other-sign (4).
+#
+# Bucket counts (verified against configs/mtsd.yaml):
+#   0  stop:        3 labels  (regulatory--stop--g1/g2/g10)
+#   1  yield:       1 label   (regulatory--yield--g1)
+#   2  warning:   135 labels  (warning--*)
+#   3  speed-limit: 29 labels (regulatory--maximum-speed-limit-*, incl. led-*)
+#   4  other-sign: 233 labels (everything else)
+#                 ---
+#                 401 total
+
+nc: 5
+names:
+  - stop
+  - yield
+  - warning
+  - speed-limit
+  - other-sign
+
+# NOTE: "regulatory--stop-here-on-red-*" and "regulatory--stop-signals-*"
+# do NOT match the stop prefix and fall through to other-sign (class 4).
+rules:
+  - {prefix: "regulatory--stop--",               class: 0}
+  - {prefix: "regulatory--yield--",              class: 1}
+  - {prefix: "warning--",                        class: 2}
+  - {prefix: "regulatory--maximum-speed-limit-", class: 3}
+  - {prefix: "regulatory--minimum-speed-limit-", class: 3}
