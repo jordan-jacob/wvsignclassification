@@ -108,7 +108,33 @@ def _write_yaml(data_dir: Path, nc: int, names: list, suffix: str) -> Path:
     return out
 
 
-def _train(variant: str, data_yaml: Path, init_weights: Path, batch: int) -> Path:
+def _make_smoke_txt(images_dir: Path, n: int, out_path: Path) -> Path:
+    """Write a .txt file listing n image paths for YOLO's txt-file dataset format.
+
+    Use images_dir / p.name (not p.resolve()) so junction paths are preserved —
+    YOLO's images->labels substitution must resolve to the correct labels dir.
+    """
+    imgs = sorted(images_dir.glob("*.*"))[:n]
+    out_path.write_text("\n".join(str(images_dir / p.name) for p in imgs))
+    print(f"  Smoke subset: {len(imgs)} images -> {out_path.name}")
+    return out_path
+
+
+def _write_yaml_from_txt(txt_path: Path, nc: int, names: list, suffix: str) -> Path:
+    """Write a dataset YAML whose train/val keys point to a .txt image list."""
+    data = {
+        "train": str(txt_path.resolve()),
+        "val": str(txt_path.resolve()),
+        "nc": nc,
+        "names": names,
+    }
+    out = txt_path.parent / f"dataset_{suffix}.yaml"
+    out.write_text(yaml.dump(data, default_flow_style=False, allow_unicode=True))
+    return out
+
+
+def _train(variant: str, data_yaml: Path, init_weights: Path,
+           batch: int, epochs: int = 30, imgsz: int = 640) -> Path:
     from ultralytics import YOLO
 
     ckpt_dir = ROOT / "checkpoints"
@@ -117,8 +143,8 @@ def _train(variant: str, data_yaml: Path, init_weights: Path, batch: int) -> Pat
     model = YOLO(str(init_weights))
     model.train(
         data=str(data_yaml),
-        epochs=30,
-        imgsz=640,
+        epochs=epochs,
+        imgsz=imgsz,
         batch=batch,
         project=str(ROOT / "runs"),
         name=f"phase2_{variant}",
@@ -135,6 +161,8 @@ def _train(variant: str, data_yaml: Path, init_weights: Path, batch: int) -> Pat
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--smoke", action="store_true",
+                    help="Quick validation: 2 epochs, 200 images, batch=4, imgsz=416")
     args = ap.parse_args()
 
     phase1_ckpt = ROOT / "checkpoints" / "phase1_mtsd_best.pt"
@@ -144,16 +172,42 @@ def main():
     lisa_dir = PROCESSED / "lisa"
     lisa_names = yaml.safe_load((CONFIGS / "lisa.yaml").read_text())["names"]
 
-    # --- variant a: full 47-class ---
-    print("\n=== Phase 2a: full 47-class LISA ===")
-    full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
-    _train("full", full_yaml, phase1_ckpt, args.batch)
+    if args.smoke:
+        epochs, imgsz, batch, n = 2, 416, 4, 200
+        print(f"\n*** SMOKE MODE: {epochs} epochs, {n} images, batch={batch}, imgsz={imgsz} ***")
 
-    # --- variant b: 4-class ---
-    print("\n=== Phase 2b: 4-class LISA ===")
-    lisa_4class_dir = ensure_lisa_4class()
-    four_yaml = _write_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES, "4class")
-    _train("4class", four_yaml, phase1_ckpt, args.batch)
+        # variant a: full 47-class smoke
+        print("\n=== Phase 2a (smoke): full 47-class LISA ===")
+        smoke_full_txt = _make_smoke_txt(
+            lisa_dir / "train" / "images", n,
+            PROCESSED / "lisa_smoke_full.txt",
+        )
+        full_yaml = _write_yaml_from_txt(smoke_full_txt, len(lisa_names), lisa_names, "smoke_full")
+        _train("smoke_full", full_yaml, phase1_ckpt, batch, epochs=epochs, imgsz=imgsz)
+
+        # variant b: 4-class smoke
+        # ensure_lisa_4class creates remapped labels under lisa_4class/train/labels/;
+        # images are a junction to lisa/train/images so YOLO resolves labels correctly.
+        print("\n=== Phase 2b (smoke): 4-class LISA ===")
+        lisa_4class_dir = ensure_lisa_4class()
+        smoke_4class_txt = _make_smoke_txt(
+            lisa_4class_dir / "train" / "images", n,
+            PROCESSED / "lisa_smoke_4class.txt",
+        )
+        four_yaml = _write_yaml_from_txt(smoke_4class_txt, len(COARSE_NAMES), COARSE_NAMES, "smoke_4class")
+        _train("smoke_4class", four_yaml, phase1_ckpt, batch, epochs=epochs, imgsz=imgsz)
+
+    else:
+        # --- variant a: full 47-class ---
+        print("\n=== Phase 2a: full 47-class LISA ===")
+        full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
+        _train("full", full_yaml, phase1_ckpt, args.batch)
+
+        # --- variant b: 4-class ---
+        print("\n=== Phase 2b: 4-class LISA ===")
+        lisa_4class_dir = ensure_lisa_4class()
+        four_yaml = _write_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES, "4class")
+        _train("4class", four_yaml, phase1_ckpt, args.batch)
 
 
 if __name__ == "__main__":

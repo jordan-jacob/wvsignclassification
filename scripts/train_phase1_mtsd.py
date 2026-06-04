@@ -12,7 +12,6 @@ default     : original full run          (yolov8m, batch=<--batch>, imgsz=640, 5
 import argparse
 import random
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -41,42 +40,37 @@ def _build_fine_to_coarse(fine_classes, rules):
     return mapping
 
 
-def _junction(link: Path, target: Path) -> None:
-    """Create a Windows directory junction (no admin required)."""
-    if link.exists():
-        return
-    link.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["cmd", "/c", "mklink", "/J", str(link), str(target.resolve())],
-        check=True,
-    )
-
-
 def ensure_coarse_dataset() -> Path:
-    mtsd = PROCESSED / "mtsd"
-    coarse = PROCESSED / "mtsd_coarse"
+    """
+    Write 5-class coarse labels directly to mtsd/{split}/labels/, backing up
+    the original 401-class labels to mtsd/{split}/labels_fine/.
 
+    Ultralytics always resolves label paths as images_dir/../labels/, so the
+    coarse labels must live in the canonical location alongside the images.
+    No directory junctions are used.
+    """
+    mtsd = PROCESSED / "mtsd"
     fine_classes = yaml.safe_load((CONFIGS / "mtsd.yaml").read_text())["names"]
     rules, _ = _load_coarse_cfg()
     fine_to_coarse = _build_fine_to_coarse(fine_classes, rules)
 
     for split in ("train", "val"):
-        src_lbl = mtsd / split / "labels"
-        dst_lbl = coarse / split / "labels"
-        dst_img = coarse / split / "images"
+        labels_dir = mtsd / split / "labels"        # where ultralytics looks
+        fine_dir   = mtsd / split / "labels_fine"   # backup of originals
 
-        _junction(dst_img, mtsd / split / "images")
-        dst_lbl.mkdir(parents=True, exist_ok=True)
-
-        existing = {p.name for p in dst_lbl.glob("*.txt")}
-        src_files = list(src_lbl.glob("*.txt"))
-        todo = [f for f in src_files if f.name not in existing]
-        if not todo:
-            print(f"  {split}: coarse labels already present ({len(src_files)} files)")
+        if fine_dir.exists():
+            n = sum(1 for _ in labels_dir.glob("*.txt"))
+            print(f"  {split}: coarse labels already in place ({n} files)")
             continue
 
-        print(f"  {split}: remapping {len(todo)} label files ...")
-        for src_file in todo:
+        # Backup original labels, then write coarse labels in their place
+        print(f"  {split}: backing up original labels to labels_fine/ ...")
+        labels_dir.rename(fine_dir)
+        labels_dir.mkdir()
+
+        src_files = list(fine_dir.glob("*.txt"))
+        print(f"  {split}: remapping {len(src_files)} label files ...")
+        for src_file in src_files:
             lines = []
             for line in src_file.read_text().splitlines():
                 if not line.strip():
@@ -84,30 +78,35 @@ def ensure_coarse_dataset() -> Path:
                 parts = line.split()
                 ci = fine_to_coarse[int(parts[0])]
                 lines.append(f"{ci} {' '.join(parts[1:])}")
-            (dst_lbl / src_file.name).write_text("\n".join(lines))
+            (labels_dir / src_file.name).write_text("\n".join(lines))
 
-    return coarse
+        # Remove any stale label cache so ultralytics rescans cleanly
+        stale = mtsd / split / "labels.cache"
+        if stale.exists():
+            stale.unlink()
+
+    return mtsd
 
 
-def _write_dataset_yaml(coarse_dir: Path, names: list) -> Path:
+def _write_dataset_yaml(mtsd_dir: Path, names: list) -> Path:
     data = {
-        "path": str(coarse_dir.resolve()),
+        "path": str(mtsd_dir.resolve()),
         "train": "train/images",
         "val": "val/images",
         "nc": len(names),
         "names": names,
     }
-    out = coarse_dir / "dataset.yaml"
+    out = mtsd_dir / "coarse_dataset.yaml"
     out.write_text(yaml.dump(data, default_flow_style=False, allow_unicode=True))
     return out
 
 
-def _write_subset_yaml(coarse_dir: Path, names: list, n_train: int, n_val: int,
+def _write_subset_yaml(mtsd_dir: Path, names: list, n_train: int, n_val: int,
                        tag: str, seed: int = 42) -> Path:
     """
-    Sample random subsets and write a dataset yaml using txt image-path lists.
-    Paths keep the junction dir so ultralytics resolves labels to
-    mtsd_coarse/{split}/labels/ correctly (not the original mtsd/ labels).
+    Sample random subsets from the real mtsd/ image dirs and write a dataset
+    yaml using txt image-path lists. Labels resolve directly to
+    mtsd/{split}/labels/ (which now contains the coarse 5-class labels).
     """
     rng = random.Random(seed)
 
@@ -115,11 +114,14 @@ def _write_subset_yaml(coarse_dir: Path, names: list, n_train: int, n_val: int,
         imgs = sorted(img_dir.glob("*.jpg"))
         return rng.sample(imgs, min(n, len(imgs))) if n < len(imgs) else imgs
 
-    train_imgs = _sample(coarse_dir / "train" / "images", n_train)
-    val_imgs   = _sample(coarse_dir / "val"   / "images", n_val)
+    train_imgs = _sample(mtsd_dir / "train" / "images", n_train)
+    val_imgs   = _sample(mtsd_dir / "val"   / "images", n_val)
 
-    train_txt = coarse_dir / f"_{tag}_train.txt"
-    val_txt   = coarse_dir / f"_{tag}_val.txt"
+    subset_dir = PROCESSED / "subsets"
+    subset_dir.mkdir(exist_ok=True)
+
+    train_txt = subset_dir / f"{tag}_train.txt"
+    val_txt   = subset_dir / f"{tag}_val.txt"
     train_txt.write_text("\n".join(str(p) for p in train_imgs))
     val_txt.write_text(  "\n".join(str(p) for p in val_imgs))
 
@@ -129,7 +131,7 @@ def _write_subset_yaml(coarse_dir: Path, names: list, n_train: int, n_val: int,
         "nc":    len(names),
         "names": names,
     }
-    out = coarse_dir / f"_dataset_{tag}.yaml"
+    out = subset_dir / f"dataset_{tag}.yaml"
     out.write_text(yaml.dump(data, default_flow_style=False, allow_unicode=True))
     return out
 
@@ -173,19 +175,19 @@ def main():
     from ultralytics import YOLO
 
     print("Preparing coarse MTSD dataset ...")
-    coarse_dir = ensure_coarse_dataset()
+    mtsd_dir = ensure_coarse_dataset()
 
     _, names = _load_coarse_cfg()
 
     patience = None  # ultralytics default (100); overridden for --full
 
     if args.smoke:
-        dataset_yaml  = _write_subset_yaml(coarse_dir, names, n_train=20, n_val=20, tag="smoke")
+        dataset_yaml  = _write_subset_yaml(mtsd_dir, names, n_train=20, n_val=20, tag="smoke")
         model_weights = "yolov8n.pt"
         epochs, batch, imgsz, run_name = 1, 4, 416, "phase1_smoke"
 
     elif args.overnight:
-        dataset_yaml  = _write_subset_yaml(coarse_dir, names, n_train=10000, n_val=400, tag="overnight")
+        dataset_yaml  = _write_subset_yaml(mtsd_dir, names, n_train=10000, n_val=400, tag="overnight")
         model_weights = "yolov8n.pt"
         epochs, batch, imgsz, run_name = 6, 4, 416, "phase1_overnight"
 
@@ -196,13 +198,13 @@ def main():
                 f"Overnight checkpoint not found: {init_ckpt}\n"
                 "Run --overnight first."
             )
-        dataset_yaml  = _write_dataset_yaml(coarse_dir, names)
+        dataset_yaml  = _write_dataset_yaml(mtsd_dir, names)
         model_weights = str(init_ckpt)
         epochs, batch, imgsz, run_name = 8, 4, 416, "phase1_full"
         patience = 20
 
     else:
-        dataset_yaml  = _write_dataset_yaml(coarse_dir, names)
+        dataset_yaml  = _write_dataset_yaml(mtsd_dir, names)
         model_weights = "yolov8m.pt"
         epochs, batch, imgsz, run_name = 50, args.batch, 640, "phase1_mtsd"
 

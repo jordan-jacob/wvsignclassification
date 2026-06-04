@@ -1,0 +1,72 @@
+# Sparse R-CNN configuration reference
+# Training code is DEFERRED — see ## Deferred section in CLAUDE.md.
+# This file documents setup requirements and data format decisions.
+
+# ── Recommended repository ───────────────────────────────────────────────────
+repo: https://github.com/PeizeSun/SparseR-CNN
+framework: detectron2
+install_note: >
+  Requires a separate conda environment. Detectron2 does NOT coexist cleanly
+  with the Ultralytics environment. Create a dedicated env:
+    conda create -n sparsercnn python=3.9
+    pip install torch torchvision
+    pip install 'git+https://github.com/facebookresearch/detectron2.git'
+    git clone https://github.com/PeizeSun/SparseR-CNN && cd SparseR-CNN
+    pip install -r requirements.txt
+
+# ── Recommended base config ──────────────────────────────────────────────────
+base_config: projects/SparseRCNN/configs/sparsercnn.res50.100pro.3x.coco.yaml
+# r50_100pro_3x is the standard ResNet-50 + 100 proposals variant.
+# 3x schedule (~36 epochs) is the published benchmark config.
+# Switch to 1x for faster iteration during initial AWS testing.
+
+# ── Data format ──────────────────────────────────────────────────────────────
+required_format: COCO JSON
+# Sparse R-CNN uses detectron2's DatasetCatalog, which expects COCO-format JSON:
+#   {
+#     "images": [{"id": int, "file_name": str, "height": int, "width": int}],
+#     "annotations": [{"id": int, "image_id": int, "category_id": int,
+#                       "bbox": [x, y, w, h], "area": float, "iscrowd": 0}],
+#     "categories": [{"id": int, "name": str}]
+#   }
+# Note: COCO bbox is [x_top_left, y_top_left, width, height],
+#       NOT [x_center, y_center, w, h] like YOLO format.
+
+# ── What we have vs. what we need ───────────────────────────────────────────
+existing_data:
+  lisa_processed:
+    location: data/processed/lisa/train/
+    format: YOLO (per-image .txt, relative cx cy w h)
+    reusable: images only
+    needs: coco_convert.py to produce instances_train.json
+  mtsd_processed:
+    location: data/processed/mtsd/
+    format: per-image JSON (MTSD native)
+    reusable: images only
+    needs: coco_convert.py to remap MTSD JSON → COCO JSON + category remapping
+
+conversion_script_needed: scripts/coco_convert.py
+# Must handle:
+#   1. LISA YOLO .txt → COCO JSON  (straightforward)
+#   2. MTSD per-image JSON → COCO JSON  (needs label remapping via mtsd_to_coarse.yaml)
+#   3. Assign consistent category_id across both datasets if training jointly
+
+# ── AWS setup estimate ───────────────────────────────────────────────────────
+aws_setup_estimate:
+  environment_setup: ~45 min
+    # detectron2 build from source on g4dn or p3 takes ~20 min the first time
+  coco_convert: ~30 min dev + 10 min runtime for full LISA+MTSD
+  config_adaptation: ~1 hr
+    # Point base config at our data, adjust num_classes, verify data loading
+  first_training_run_1x: ~4-6 hr on g4dn.xlarge (single V100/T4)
+  total_before_first_results: ~6-8 hr
+
+# ── Key hyperparameter differences from YOLO baseline ───────────────────────
+notes:
+  - Sparse R-CNN uses a fixed set of learned proposal boxes (100 by default),
+    not anchor-based or anchor-free predictions. This makes it naturally suited
+    to sparse sign detection where most of the image is background.
+  - num_proposals: 100  # increase to 300 if small-sign recall is poor
+  - The backbone is shared with our Phase 1 ResNet-50, but detectron2 loads
+    ImageNet weights independently — no direct way to transfer our phase1_mtsd_best.pt
+    weights without writing a custom weight-loading script.

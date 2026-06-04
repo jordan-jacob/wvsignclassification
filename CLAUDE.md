@@ -100,3 +100,22 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## Deferred
+
+### Sparse R-CNN
+Sparse R-CNN (PeizeSun/SparseR-CNN) requires a **separate mmdetection/detectron2
+environment** that does not coexist with the Ultralytics environment used for
+Phases 1 and 2. Do not attempt to install it into the existing venv.
+
+Before any Sparse R-CNN training can run, two prerequisites must be completed:
+
+1. **`scripts/coco_convert.py`** — converts our processed LISA (YOLO .txt) and
+   MTSD (per-image JSON) data to COCO JSON format. COCO bbox is
+   `[x_top_left, y_top_left, width, height]`, not YOLO's `[cx, cy, w, h]`.
+   Must also handle MTSD → coarse label remapping via `configs/mtsd_to_coarse.yaml`.
+
+2. **Detectron2 environment setup** (~45 min on AWS, build from source).
+
+See `configs/sparse_rcnn.yaml` for the recommended base config, full data format
+notes, and AWS setup time estimates.

@@ -76,12 +76,34 @@ def _row(label: str, m50: float, m: float, p: float, r: float) -> str:
     return f"  {label:<22} {m50:>8.4f}   {m:>9.4f}   {p:>9.4f}   {r:>6.4f}"
 
 
+def _write_eval_yaml_from_txt(txt_path: Path, nc: int, names: list) -> Path:
+    data = {
+        "train": str(txt_path.resolve()),
+        "val": str(txt_path.resolve()),
+        "nc": nc,
+        "names": names,
+    }
+    out = txt_path.parent / f"_eval_{txt_path.stem}.yaml"
+    out.write_text(yaml.dump(data, default_flow_style=False, allow_unicode=True))
+    return out
+
+
 def main():
+    import argparse
     from ultralytics import YOLO
 
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--smoke", action="store_true",
+                    help="Evaluate smoke-test checkpoints on the 200-image subset")
+    args = ap.parse_args()
+
     ckpt_dir = ROOT / "checkpoints"
-    full_ckpt = ckpt_dir / "phase2_full_best.pt"
-    four_ckpt = ckpt_dir / "phase2_4class_best.pt"
+    if args.smoke:
+        full_ckpt = ckpt_dir / "phase2_smoke_full_best.pt"
+        four_ckpt = ckpt_dir / "phase2_smoke_4class_best.pt"
+    else:
+        full_ckpt = ckpt_dir / "phase2_full_best.pt"
+        four_ckpt = ckpt_dir / "phase2_4class_best.pt"
 
     for p in (full_ckpt, four_ckpt):
         if not p.exists():
@@ -91,8 +113,17 @@ def main():
     lisa_dir = PROCESSED / "lisa"
     lisa_4class_dir = PROCESSED / "lisa_4class"
 
-    full_yaml = _write_eval_yaml(lisa_dir, len(lisa_names), lisa_names)
-    four_yaml = _write_eval_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES)
+    if args.smoke:
+        full_txt = PROCESSED / "lisa_smoke_full.txt"
+        four_txt = PROCESSED / "lisa_smoke_4class.txt"
+        for t in (full_txt, four_txt):
+            if not t.exists():
+                raise FileNotFoundError(f"Smoke subset not found: {t} — run train_phase2_lisa.py --smoke first")
+        full_yaml = _write_eval_yaml_from_txt(full_txt, len(lisa_names), lisa_names)
+        four_yaml = _write_eval_yaml_from_txt(four_txt, len(COARSE_NAMES), COARSE_NAMES)
+    else:
+        full_yaml = _write_eval_yaml(lisa_dir, len(lisa_names), lisa_names)
+        four_yaml = _write_eval_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES)
 
     print("Evaluating full 47-class model ...")
     full_model = YOLO(str(full_ckpt))

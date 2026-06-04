@@ -1,0 +1,10 @@
+# Minimal training requirements for AWS.
+# Install PyTorch separately with the CUDA wheel (see aws_setup.sh).
+ultralytics==8.4.60
+numpy==2.4.6
+opencv-python==4.13.0.92
+PyYAML==6.0.3
+pandas==3.0.3
+Pillow==12.2.0
+scipy==1.17.1
+matplotlib==3.10.9

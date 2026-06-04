@@ -1,7 +1,7 @@
 task: detect
 mode: train
 model: C:\Users\jrj00048\Projects\wvsignclassification\checkpoints\phase1_overnight_best.pt
-data: C:\Users\jrj00048\Projects\wvsignclassification\data\processed\mtsd_coarse\dataset.yaml
+data: C:\Users\jrj00048\Projects\wvsignclassification\data\processed\mtsd\coarse_dataset.yaml
 epochs: 8
 time: null
 patience: 20
