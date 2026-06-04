@@ -4,9 +4,10 @@ Phase 1: Pre-train YOLOv8 on MTSD with 5 coarse classes.
 
 Flags
 -----
---smoke     : 5-batch sanity check  (yolov8n, batch=4, imgsz=416, 1 epoch, 20 images)
---overnight : 10 000-image subset run (yolov8n, batch=4, imgsz=416, 6 epochs)
-default     : full run               (yolov8m, batch=<--batch>, imgsz=640, 50 epochs)
+--smoke     : 5-batch sanity check       (yolov8n, batch=4, imgsz=416, 1 epoch, 20 images)
+--overnight : 10 000-image subset run    (yolov8n, batch=4, imgsz=416, 6 epochs)
+--full      : all 36 589 MTSD images     (init from overnight ckpt, batch=4, imgsz=416, 8 epochs, patience=20)
+default     : original full run          (yolov8m, batch=<--batch>, imgsz=640, 50 epochs)
 """
 import argparse
 import random
@@ -165,6 +166,8 @@ def main():
                     help="5-batch sanity check (yolov8n, batch=4, imgsz=416, 1 epoch)")
     ap.add_argument("--overnight", action="store_true",
                     help="10 000-image subset (yolov8n, batch=4, imgsz=416, 6 epochs)")
+    ap.add_argument("--full",      action="store_true",
+                    help="Full MTSD run init from overnight ckpt (batch=4, imgsz=416, 8 epochs, patience=20)")
     args = ap.parse_args()
 
     from ultralytics import YOLO
@@ -174,31 +177,74 @@ def main():
 
     _, names = _load_coarse_cfg()
 
+    patience = None  # ultralytics default (100); overridden for --full
+
     if args.smoke:
-        # 20 images ÷ batch=4 = exactly 5 batches
         dataset_yaml  = _write_subset_yaml(coarse_dir, names, n_train=20, n_val=20, tag="smoke")
         model_weights = "yolov8n.pt"
         epochs, batch, imgsz, run_name = 1, 4, 416, "phase1_smoke"
+
     elif args.overnight:
         dataset_yaml  = _write_subset_yaml(coarse_dir, names, n_train=10000, n_val=400, tag="overnight")
         model_weights = "yolov8n.pt"
         epochs, batch, imgsz, run_name = 6, 4, 416, "phase1_overnight"
+
+    elif args.full:
+        init_ckpt = ROOT / "checkpoints" / "phase1_overnight_best.pt"
+        if not init_ckpt.exists():
+            raise FileNotFoundError(
+                f"Overnight checkpoint not found: {init_ckpt}\n"
+                "Run --overnight first."
+            )
+        dataset_yaml  = _write_dataset_yaml(coarse_dir, names)
+        model_weights = str(init_ckpt)
+        epochs, batch, imgsz, run_name = 8, 4, 416, "phase1_full"
+        patience = 20
+
     else:
         dataset_yaml  = _write_dataset_yaml(coarse_dir, names)
         model_weights = "yolov8m.pt"
         epochs, batch, imgsz, run_name = 50, args.batch, 640, "phase1_mtsd"
 
-    print(f"Mode    : {'smoke' if args.smoke else 'overnight' if args.overnight else 'full'}")
-    print(f"Model   : {model_weights}  epochs={epochs}  batch={batch}  imgsz={imgsz}")
+    mode = ("smoke" if args.smoke else "overnight" if args.overnight
+            else "full" if args.full else "default")
+    print(f"Mode    : {mode}")
+    print(f"Model   : {model_weights}")
+    print(f"Config  : epochs={epochs}  batch={batch}  imgsz={imgsz}"
+          + (f"  patience={patience}" if patience is not None else ""))
     print(f"Dataset : {dataset_yaml}")
+
+    if args.full:
+        # Scale-based time estimate: full run has 36,589/10,000 = 3.66x images per epoch.
+        # Epoch-ratio for 8 vs 6 adds another 8/6 = 1.33x on top.
+        n_full, n_over = 36589, 10000
+        img_scale  = n_full / n_over          # 3.66 — more images per epoch
+        ep_scale_6 = img_scale                # 6-epoch full vs 6-epoch overnight
+        ep_scale_8 = img_scale * (8 / 6)     # 8-epoch ceiling
+        print()
+        print(f"  Init weights : {init_ckpt.name}  (NOT yolov8n.pt)")
+        print(f"  Train images : {n_full:,}  ({img_scale:.1f}x overnight per epoch)")
+        print(f"  Early-stop   : patience={patience} — won't trigger within 8 epochs;")
+        print(f"                 effectively runs all 8 unless you Ctrl+C")
+        print()
+        print("  Time estimates (based on overnight run duration):")
+        for oh_h, label in [(5, "5 h overnight"), (8, "8 h overnight"), (11, "11 h overnight")]:
+            h6, m6 = divmod(int(oh_h * ep_scale_6 * 3600), 3600)
+            m6 //= 60
+            h8, m8 = divmod(int(oh_h * ep_scale_8 * 3600), 3600)
+            m8 //= 60
+            print(f"    {label}: 6-ep likely ~{h6}h {m6:02d}m  |  8-ep ceiling ~{h8}h {m8:02d}m")
+        print("  Exact per-epoch ETA printed after epoch 1 completes.")
+        print()
 
     ckpt_dir = ROOT / "checkpoints"
     ckpt_dir.mkdir(exist_ok=True)
 
     model = YOLO(model_weights)
-    if args.overnight:
+    if args.overnight or args.full:
         _add_eta_callback(model, epochs)
-    model.train(
+
+    train_kwargs = dict(
         data=str(dataset_yaml),
         epochs=epochs,
         imgsz=imgsz,
@@ -207,17 +253,22 @@ def main():
         name=run_name,
         exist_ok=True,
     )
+    if patience is not None:
+        train_kwargs["patience"] = patience
+
+    model.train(**train_kwargs)
 
     best = ROOT / "runs" / run_name / "weights" / "best.pt"
     ckpt_name = (
-        "phase1_overnight_best.pt" if args.overnight else
-        "phase1_smoke_best.pt"     if args.smoke     else
+        "phase1_full_best.pt"      if args.full      else
+        "phase1_overnight_best.pt" if args.overnight  else
+        "phase1_smoke_best.pt"     if args.smoke      else
         "phase1_mtsd_best.pt"
     )
     dest = ckpt_dir / ckpt_name
     shutil.copy(best, dest)
     print(f"Saved: {dest}")
-    if args.overnight:
+    if args.overnight or args.full:
         print()
         print("To use this checkpoint for phase 2, run:")
         print(f"  copy {dest} {ckpt_dir / 'phase1_mtsd_best.pt'}")
