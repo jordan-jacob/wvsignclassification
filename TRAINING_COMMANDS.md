@@ -1,10 +1,10 @@
 # Training Commands
 
-Run these in order. Each step requires the checkpoint from the previous step.
+Run in this order. Each step requires the checkpoint from the previous step.
 
 ---
 
-## Smoke tests (run first to verify environment)
+## 0. Smoke tests (run first — verify environment, ~5 min total)
 
 ```bash
 python scripts/train_phase1_mtsd.py --smoke
@@ -16,83 +16,73 @@ python scripts/coco_convert.py --dataset lisa --smoke
 
 ---
 
-## Phase 1 — MTSD pre-training
+## 1. Phase 1 — MTSD pre-training (~14 hr, early stop ~100 ep)
 
 ```bash
-python scripts/train_phase1_mtsd.py --batch 16
+python scripts/train_phase1_mtsd.py --production
 ```
 
-Checkpoint: `checkpoints/phase1_mtsd_best.pt`  
-Time: ~3–4 hr (g4dn.xlarge)
+Output: `checkpoints/phase1_mtsd_best.pt`
 
 ---
 
-## Phase 2 — LISA fine-tune
+## 2. Phase 2 — YOLOv8m LISA fine-tune (~4 hr, early stop ~150 ep)
 
 ```bash
-# YOLOv8m
-python scripts/train_phase2_lisa.py --batch 16
-
-# YOLOv11m (can run in parallel on a second GPU)
-python scripts/train_phase2_yolo11.py --batch 16
+python scripts/train_phase2_lisa.py --production
 ```
 
-Checkpoints:
-- `checkpoints/phase2_full_best.pt`
-- `checkpoints/phase2_4class_best.pt`
-- `checkpoints/phase2_yolo11_full_best.pt`
-- `checkpoints/phase2_yolo11_4class_best.pt`
-
-Time: ~1–2 hr each
+Output: `checkpoints/phase2_full_best.pt`, `checkpoints/phase2_4class_best.pt`
 
 ---
 
-## FND training
+## 3. Phase 2 — YOLOv11m LISA fine-tune (~4 hr, early stop ~150 ep)
+
+```bash
+python scripts/train_phase2_yolo11.py --production
+```
+
+Output: `checkpoints/phase2_yolo11_full_best.pt`, `checkpoints/phase2_yolo11_4class_best.pt`
+
+---
+
+## 4. FND training (~1 hr)
 
 ```bash
 python scripts/train_fnd.py \
     --checkpoint checkpoints/phase2_4class_best.pt \
-    --epochs 20 --batch 16
+    --production
 ```
 
-Checkpoint: `checkpoints/fnd_classifier.pt`  
-Time: ~30 min
+Output: `checkpoints/fnd_classifier.pt`
 
 ---
 
-## Sparse R-CNN (detectron2_env)
+## 5. Sparse R-CNN (~10 hr)
 
 ```bash
 conda activate detectron2_env
-
-# Convert data (one-time, ~10 min)
 python scripts/coco_convert.py --dataset lisa
-python scripts/coco_convert.py --dataset mtsd_coarse  # optional
-
-# Smoke test
-python scripts/train_sparse_rcnn.py --smoke
-
-# Full training
+python scripts/train_sparse_rcnn.py --smoke    # ~5 min — verify data loads
 python scripts/train_sparse_rcnn.py
-
 conda deactivate
 ```
 
-Checkpoint: `runs/sparse_rcnn/model_final.pth`  
-Time: ~4–6 hr (g4dn.xlarge)
+Output: `runs/sparse_rcnn/model_final.pth`
 
 ---
 
-## Model comparison
+## 6. Model comparison (run after all checkpoints exist)
 
 ```bash
-# YOLO models only
 python scripts/compare_models.py \
     --models yolov8:checkpoints/phase2_full_best.pt \
              yolo11:checkpoints/phase2_yolo11_full_best.pt \
     --data configs/lisa.yaml --split val --with-fnd
+```
 
-# Include Sparse R-CNN (requires detectron2_env active)
+To include Sparse R-CNN:
+```bash
 conda activate detectron2_env
 python scripts/compare_models.py \
     --models yolov8:checkpoints/phase2_full_best.pt \

@@ -4,10 +4,11 @@ Phase 1: Pre-train YOLOv8 on MTSD with 5 coarse classes.
 
 Flags
 -----
---smoke     : 5-batch sanity check       (yolov8n, batch=4, imgsz=416, 1 epoch, 20 images)
---overnight : 10 000-image subset run    (yolov8n, batch=4, imgsz=416, 6 epochs)
---full      : all 36 589 MTSD images     (init from overnight ckpt, batch=4, imgsz=416, 8 epochs, patience=20)
-default     : original full run          (yolov8m, batch=<--batch>, imgsz=640, 50 epochs)
+--smoke      : 5-batch sanity check       (yolov8n, batch=4, imgsz=416, 1 epoch, 20 images)
+--overnight  : 10 000-image subset run    (yolov8n, batch=4, imgsz=416, 6 epochs)
+--full       : all 36 589 MTSD images     (init from overnight ckpt, batch=4, imgsz=416, 8 epochs, patience=20)
+--production : all 36 589 MTSD images     (yolov8m.pt ImageNet init, batch=16, imgsz=640, 200 epochs, patience=50)
+default      : original full run          (yolov8m, batch=<--batch>, imgsz=640, 50 epochs)
 """
 import argparse
 import random
@@ -136,6 +137,21 @@ def _write_subset_yaml(mtsd_dir: Path, names: list, n_train: int, n_val: int,
     return out
 
 
+def _add_early_stop_callback(model, total_epochs: int, ckpt_name: str) -> None:
+    """Print a clear summary when Ultralytics training ends (early stop or completion)."""
+    def on_train_end(trainer):
+        actual = trainer.epoch + 1
+        best = trainer.best_fitness
+        dest = f"checkpoints/{ckpt_name}"
+        if actual < total_epochs:
+            print(f"\nEarly stop: epoch {actual}/{total_epochs} -- "
+                  f"best mAP50={best:.4f}. Saved: {dest}")
+        else:
+            print(f"\nTraining complete: {total_epochs} epochs. "
+                  f"Best mAP50={best:.4f}. Saved: {dest}")
+    model.add_callback("on_train_end", on_train_end)
+
+
 def _add_eta_callback(model, total_epochs: int) -> None:
     """After epoch 1 finishes, print actual duration and projected finish time."""
     t0 = [None]
@@ -170,6 +186,8 @@ def main():
                     help="10 000-image subset (yolov8n, batch=4, imgsz=416, 6 epochs)")
     ap.add_argument("--full",      action="store_true",
                     help="Full MTSD run init from overnight ckpt (batch=4, imgsz=416, 8 epochs, patience=20)")
+    ap.add_argument("--production", action="store_true",
+                    help="Production: yolov8m.pt ImageNet init, 200 epochs, patience=50, batch=16, imgsz=640")
     args = ap.parse_args()
 
     from ultralytics import YOLO
@@ -203,13 +221,19 @@ def main():
         epochs, batch, imgsz, run_name = 8, 4, 416, "phase1_full"
         patience = 20
 
+    elif args.production:
+        dataset_yaml  = _write_dataset_yaml(mtsd_dir, names)
+        model_weights = "yolov8m.pt"  # ImageNet init; NOT the overnight nano ckpt (different arch)
+        epochs, batch, imgsz, run_name = 200, args.batch, 640, "phase1_mtsd"
+        patience = 50
+
     else:
         dataset_yaml  = _write_dataset_yaml(mtsd_dir, names)
         model_weights = "yolov8m.pt"
         epochs, batch, imgsz, run_name = 50, args.batch, 640, "phase1_mtsd"
 
     mode = ("smoke" if args.smoke else "overnight" if args.overnight
-            else "full" if args.full else "default")
+            else "full" if args.full else "production" if args.production else "default")
     print(f"Mode    : {mode}")
     print(f"Model   : {model_weights}")
     print(f"Config  : epochs={epochs}  batch={batch}  imgsz={imgsz}"
@@ -245,6 +269,8 @@ def main():
     model = YOLO(model_weights)
     if args.overnight or args.full:
         _add_eta_callback(model, epochs)
+    if not args.smoke and not args.overnight:
+        _add_early_stop_callback(model, epochs, f"{run_name}_best.pt")
 
     train_kwargs = dict(
         data=str(dataset_yaml),

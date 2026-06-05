@@ -57,45 +57,78 @@ ls checkpoints/phase1_mtsd_best.pt            # expect file present
 
 ## Step 4 — Weekend training run order
 
-Run these in sequence. Each step depends on the checkpoint from the step before it.
-See `TRAINING_COMMANDS.md` for the exact commands.
+**Use `--production` for all runs.** Each step requires the checkpoint from the previous step.  
+See `TRAINING_COMMANDS.md` for exact commands.
 
-### 1. Phase 1 — MTSD pre-training (~3–4 hr on g4dn.xlarge)
+### Time estimate (single g4dn.xlarge)
+
+| Step | Max epochs | Expected early stop | Est. time |
+|---|---|---|---|
+| Phase 1 MTSD | 200 (patience=50) | ~ep 100 | ~14 hr |
+| Phase 2 YOLOv8m | 300 (patience=50) | ~ep 150 | ~4 hr |
+| Phase 2 YOLOv11m | 300 (patience=50) | ~ep 150 | ~4 hr |
+| FND | 50 (patience=10) | ~ep 30 | ~1 hr |
+| Sparse R-CNN | 90 000 iters | — | ~10 hr |
+| Eval + buffer | — | — | ~2 hr |
+| **Total** | | | **~35 hr** |
+
+35 hours fits a weekend run comfortably. Phase 2 runs are sequential on a single GPU
+(~8 hr combined). If a second instance is available, they can run in parallel (~4 hr).
+
+### Sequencing constraint
+
+**Phase 1 must complete before Phase 2 starts** — Phase 2 requires `checkpoints/phase1_mtsd_best.pt`.  
+Phase 2 YOLOv8m and YOLOv11m are independent of each other and can run on separate instances.
+
+**Sequential (single GPU, recommended):**
 ```bash
-python scripts/train_phase1_mtsd.py --batch 16
+python scripts/train_phase1_mtsd.py --production          # ~14 hr
+python scripts/train_phase2_lisa.py --production           # ~4 hr
+python scripts/train_phase2_yolo11.py --production         # ~4 hr
+python scripts/train_fnd.py --checkpoint checkpoints/phase2_4class_best.pt --production   # ~1 hr
 ```
-Output: `checkpoints/phase1_mtsd_best.pt`
 
-### 2. Phase 2 — YOLOv8m LISA fine-tune (~1–2 hr)
+**Parallel option (two instances):**  
+After Phase 1 completes and `phase1_mtsd_best.pt` is synced to S3, start Phase 2 YOLOv8m on
+instance A and Phase 2 YOLOv11m on instance B simultaneously. Saves ~4 hr.
+
+### 1. Phase 1 — MTSD pre-training (~14 hr)
+```bash
+python scripts/train_phase1_mtsd.py --production
+```
+Output: `checkpoints/phase1_mtsd_best.pt`  
+*Script prints "Early stop: epoch X/200" or "Training complete: 200 epochs" when done.*
+
+### 2. Phase 2 — YOLOv8m LISA fine-tune (~4 hr)
 *Requires Phase 1 checkpoint.*
 ```bash
-python scripts/train_phase2_lisa.py --batch 16
+python scripts/train_phase2_lisa.py --production
 ```
 Output: `checkpoints/phase2_full_best.pt`, `checkpoints/phase2_4class_best.pt`
 
-### 3. Phase 2 — YOLOv11m LISA fine-tune (~1–2 hr)
-*Can run in parallel with Step 2 if two GPUs are available; otherwise run after.*
+### 3. Phase 2 — YOLOv11m LISA fine-tune (~4 hr)
+*Requires Phase 1 checkpoint. Can run concurrently with Step 2 on a second instance.*
 ```bash
-python scripts/train_phase2_yolo11.py --batch 16
+python scripts/train_phase2_yolo11.py --production
 ```
 Output: `checkpoints/phase2_yolo11_full_best.pt`, `checkpoints/phase2_yolo11_4class_best.pt`
 
-### 4. FND training (~30 min)
-*Requires Phase 2 checkpoint.*
+### 4. FND training (~1 hr)
+*Requires Phase 2 4-class checkpoint.*
 ```bash
 python scripts/train_fnd.py \
     --checkpoint checkpoints/phase2_4class_best.pt \
-    --epochs 20 --batch 16
+    --production
 ```
 Output: `checkpoints/fnd_classifier.pt`
 
-### 5. Sparse R-CNN (~4–6 hr on g4dn.xlarge)
+### 5. Sparse R-CNN (~10 hr)
 *Requires detectron2_env (Step 2 above) and COCO JSON conversion.*
 ```bash
 conda activate detectron2_env
 python scripts/coco_convert.py --dataset lisa
 python scripts/train_sparse_rcnn.py --smoke    # confirm data loads (~5 min)
-python scripts/train_sparse_rcnn.py            # full 3x training
+python scripts/train_sparse_rcnn.py
 conda deactivate
 ```
 Output: `runs/sparse_rcnn/model_final.pth`

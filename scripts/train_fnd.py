@@ -6,8 +6,14 @@ Positive examples:  GT boxes the detector missed (max IoU with any pred < 0.5)
 Negative examples:  grid crops confirmed background (max IoU with all GT < 0.1)
 
 Usage:
-  python scripts/train_fnd.py --ckpt checkpoints/phase2_full_best.pt
-  python scripts/train_fnd.py --ckpt checkpoints/phase2_full_best.pt --smoke
+  python scripts/train_fnd.py --checkpoint checkpoints/phase2_full_best.pt
+  python scripts/train_fnd.py --checkpoint checkpoints/phase2_full_best.pt --smoke
+  python scripts/train_fnd.py --checkpoint checkpoints/phase2_4class_best.pt --production
+
+Flags
+-----
+--production : epochs=50, batch=32, neg-ratio=5, patience=10
+--smoke      : 50 images, 2 epochs
 """
 import argparse
 import sys
@@ -184,6 +190,8 @@ def main():
                          "Defaults to data/processed/lisa/train/ if omitted.")
     ap.add_argument("--smoke", action="store_true",
                     help="50 images, 2 epochs")
+    ap.add_argument("--production", action="store_true",
+                    help="Production: epochs=50, batch=32, neg-ratio=5, patience=10")
     ap.add_argument("--dry-run", action="store_true",
                     help="Generate training data and print class balance, then exit without training")
     ap.add_argument("--epochs", type=int, default=10)
@@ -218,11 +226,14 @@ def main():
         images_dir = processed / "train" / "images"
         labels_dir = processed / "train" / "labels"
 
-    epochs = 2 if args.smoke else args.epochs
-    max_images = 50 if args.smoke else None
-
     if args.smoke:
+        epochs, batch, neg_ratio, max_images = 2, args.batch, args.neg_ratio, 50
         print(f"*** SMOKE MODE: {max_images} images, {epochs} epochs ***\n")
+    elif args.production:
+        epochs, batch, neg_ratio, max_images = 50, 32, 5, None
+        print(f"*** PRODUCTION MODE: {epochs} epochs, batch={batch}, neg-ratio={neg_ratio} ***\n")
+    else:
+        epochs, batch, neg_ratio, max_images = args.epochs, args.batch, args.neg_ratio, None
     if args.dry_run:
         print("*** DRY-RUN MODE: generating training data only, no training ***\n")
 
@@ -234,7 +245,7 @@ def main():
         labels_dir=labels_dir,
         imgsz=640,
         max_images=max_images,
-        neg_ratio=args.neg_ratio,
+        neg_ratio=neg_ratio,
     )
 
     total = len(pos_crops) + len(neg_crops)
@@ -254,21 +265,37 @@ def main():
         )
 
     dataset = FNDDataset(pos_crops, neg_crops)
-    loader = DataLoader(dataset, batch_size=args.batch, shuffle=True, num_workers=0)
+    loader = DataLoader(dataset, batch_size=batch, shuffle=True, num_workers=0)
 
     model = FNDClassifier().to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
 
-    print(f"\nTraining FND classifier ({len(dataset)} samples, {epochs} epochs) ...")
+    out = ROOT / "checkpoints" / "fnd_classifier.pt"
+    out.parent.mkdir(exist_ok=True)
+
+    fnd_patience = 10
+    best_loss = float("inf")
+    no_improve = 0
+
+    print(f"\nTraining FND classifier ({len(dataset)} samples, {epochs} epochs, "
+          f"patience={fnd_patience}) ...")
     for epoch in range(1, epochs + 1):
         loss, acc = train_epoch(model, loader, optimizer, criterion, args.device)
         print(f"  Epoch {epoch:2d}/{epochs}  loss={loss:.4f}  acc={acc:.4f}")
-
-    out = ROOT / "checkpoints" / "fnd_classifier.pt"
-    out.parent.mkdir(exist_ok=True)
-    torch.save(model.state_dict(), out)
-    print(f"\nSaved: {out}")
+        if loss < best_loss - 1e-4:
+            best_loss = loss
+            no_improve = 0
+            torch.save(model.state_dict(), out)
+        else:
+            no_improve += 1
+            if no_improve >= fnd_patience:
+                print(f"\nEarly stop: epoch {epoch}/{epochs} -- "
+                      f"best loss={best_loss:.4f}. Saved: {out}")
+                break
+    else:
+        print(f"\nTraining complete: {epochs} epochs. "
+              f"Best loss={best_loss:.4f}. Saved: {out}")
 
 
 if __name__ == "__main__":

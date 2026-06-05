@@ -7,6 +7,11 @@ Trains two models in sequence:
   b) 4-class coarse model  → checkpoints/phase2_4class_best.pt
 
 LISA has no official val split; training images are reused for validation.
+
+Flags
+-----
+--production : 300 epochs, patience=50, batch=16, imgsz=640
+--smoke      : 2 epochs, 200 images, batch=4, imgsz=416
 """
 import argparse
 import shutil
@@ -133,15 +138,33 @@ def _write_yaml_from_txt(txt_path: Path, nc: int, names: list, suffix: str) -> P
     return out
 
 
+def _add_early_stop_callback(model, total_epochs: int, ckpt_name: str) -> None:
+    def on_train_end(trainer):
+        actual = trainer.epoch + 1
+        best = trainer.best_fitness
+        dest = f"checkpoints/{ckpt_name}"
+        if actual < total_epochs:
+            print(f"\nEarly stop: epoch {actual}/{total_epochs} -- "
+                  f"best mAP50={best:.4f}. Saved: {dest}")
+        else:
+            print(f"\nTraining complete: {total_epochs} epochs. "
+                  f"Best mAP50={best:.4f}. Saved: {dest}")
+    model.add_callback("on_train_end", on_train_end)
+
+
 def _train(variant: str, data_yaml: Path, init_weights: Path,
-           batch: int, epochs: int = 30, imgsz: int = 640) -> Path:
+           batch: int, epochs: int = 30, imgsz: int = 640,
+           patience: int | None = None) -> Path:
     from ultralytics import YOLO
 
     ckpt_dir = ROOT / "checkpoints"
     ckpt_dir.mkdir(exist_ok=True)
 
+    ckpt_name = f"phase2_{variant}_best.pt"
     model = YOLO(str(init_weights))
-    model.train(
+    _add_early_stop_callback(model, epochs, ckpt_name)
+
+    train_kwargs = dict(
         data=str(data_yaml),
         epochs=epochs,
         imgsz=imgsz,
@@ -150,11 +173,14 @@ def _train(variant: str, data_yaml: Path, init_weights: Path,
         name=f"phase2_{variant}",
         exist_ok=True,
     )
+    if patience is not None:
+        train_kwargs["patience"] = patience
+
+    model.train(**train_kwargs)
 
     best = ROOT / "runs" / f"phase2_{variant}" / "weights" / "best.pt"
-    dest = ckpt_dir / f"phase2_{variant}_best.pt"
+    dest = ckpt_dir / ckpt_name
     shutil.copy(best, dest)
-    print(f"Saved: {dest}")
     return dest
 
 
@@ -163,6 +189,8 @@ def main():
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--smoke", action="store_true",
                     help="Quick validation: 2 epochs, 200 images, batch=4, imgsz=416")
+    ap.add_argument("--production", action="store_true",
+                    help="Production: 300 epochs, patience=50, batch=16, imgsz=640")
     args = ap.parse_args()
 
     phase1_ckpt = ROOT / "checkpoints" / "phase1_mtsd_best.pt"
@@ -173,7 +201,7 @@ def main():
     lisa_names = yaml.safe_load((CONFIGS / "lisa.yaml").read_text())["names"]
 
     if args.smoke:
-        epochs, imgsz, batch, n = 2, 416, 4, 200
+        epochs, imgsz, batch, patience, n = 2, 416, 4, None, 200
         print(f"\n*** SMOKE MODE: {epochs} epochs, {n} images, batch={batch}, imgsz={imgsz} ***")
 
         # variant a: full 47-class smoke
@@ -198,16 +226,27 @@ def main():
         _train("smoke_4class", four_yaml, phase1_ckpt, batch, epochs=epochs, imgsz=imgsz)
 
     else:
+        epochs  = 300 if args.production else 30
+        imgsz   = 640
+        batch   = args.batch
+        patience = 50 if args.production else None
+
+        if args.production:
+            print(f"\n*** PRODUCTION MODE: {epochs} epochs, patience={patience}, "
+                  f"batch={batch}, imgsz={imgsz} ***")
+
         # --- variant a: full 47-class ---
         print("\n=== Phase 2a: full 47-class LISA ===")
         full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
-        _train("full", full_yaml, phase1_ckpt, args.batch)
+        _train("full", full_yaml, phase1_ckpt, batch, epochs=epochs,
+               imgsz=imgsz, patience=patience)
 
         # --- variant b: 4-class ---
         print("\n=== Phase 2b: 4-class LISA ===")
         lisa_4class_dir = ensure_lisa_4class()
         four_yaml = _write_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES, "4class")
-        _train("4class", four_yaml, phase1_ckpt, args.batch)
+        _train("4class", four_yaml, phase1_ckpt, batch, epochs=epochs,
+               imgsz=imgsz, patience=patience)
 
 
 if __name__ == "__main__":
