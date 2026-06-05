@@ -1,0 +1,31 @@
+# Detectron2 / SparseR-CNN config for LISA 4-class training.
+#
+# _BASE_ is relative to THIS file. Adjust the path to match where you cloned
+# PeizeSun/SparseR-CNN. If it is a sibling of this repo (~/SparseR-CNN/),
+# the path below is correct when running from ~/wvsignclassification/.
+#
+# Class index mapping (0-indexed, background is implicit in detectron2):
+#   0: stop
+#   1: yield
+#   2: warning
+#   3: speed-limit
+#
+# For mtsd_coarse (5 classes), set NUM_CLASSES: 5 and update DATASETS.
+
+_BASE_: "../../SparseR-CNN/projects/SparseRCNN/configs/sparsercnn.res50.100pro.3x.coco.yaml"
+
+MODEL:
+  ROI_HEADS:
+    NUM_CLASSES: 4  # LISA coarse: stop / yield / warning / speed-limit
+                    # Change to 5 if training on mtsd_coarse (adds other-sign)
+
+DATASETS:
+  TRAIN: ("lisa_train",)
+  TEST: ("lisa_val",)
+
+SOLVER:
+  MAX_ITER: 90000      # 3x schedule default (~36 epochs equivalent)
+  IMS_PER_BATCH: 16
+  # Reduce IMS_PER_BATCH to 8 on g4dn.xlarge (16 GB VRAM) if OOM.
+
+OUTPUT_DIR: "runs/sparse_rcnn"

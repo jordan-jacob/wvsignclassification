@@ -25,6 +25,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(ROOT / "configs"))
 
 COARSE_NAMES = ["stop", "yield", "warning", "speed-limit"]
 
@@ -154,6 +155,94 @@ def _per_class_rows(results: list[dict]) -> list[dict]:
     return rows
 
 
+# ── Sparse R-CNN evaluator ────────────────────────────────────────────────────
+
+class SparseRCNNEvaluator:
+    """
+    Wraps detectron2's COCOEvaluator for Sparse R-CNN checkpoints.
+
+    Spec format: sparse_rcnn:<config_path>:<checkpoint_path>
+    e.g.  sparse_rcnn:configs/sparse_rcnn_lisa.yaml:runs/sparse_rcnn/model_final.pth
+
+    Returns a result dict with keys matching the YOLO summary row:
+        mAP50, mAP50-95, Precision (N/A), Recall (N/A), Params(M), Inference(ms)
+    """
+
+    def __init__(self, config_rel: str, ckpt_rel: str):
+        self.config_path = ROOT / config_rel
+        self.ckpt_path = ROOT / ckpt_rel
+        self.label = f"sparse_rcnn:{self.ckpt_path.stem}"
+
+    @staticmethod
+    def available() -> bool:
+        try:
+            import detectron2  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def evaluate(self) -> dict | None:
+        if not self.available():
+            print("  sparse_rcnn requires detectron2 — skipping.")
+            print("  Install: pip install 'git+https://github.com/facebookresearch/detectron2.git'")
+            return None
+        if not self.ckpt_path.exists():
+            print(f"  WARNING: checkpoint not found: {self.ckpt_path}", file=sys.stderr)
+            return None
+
+        import sparse_rcnn_register  # noqa: F401 — registers datasets
+        from detectron2.config import get_cfg
+        from detectron2.engine import DefaultPredictor
+        from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+        from detectron2.data import build_detection_test_loader
+
+        cfg = get_cfg()
+        cfg.merge_from_file(str(self.config_path))
+        cfg.MODEL.WEIGHTS = str(self.ckpt_path)
+        cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.5
+        cfg.freeze()
+
+        predictor = DefaultPredictor(cfg)
+        dataset_name = cfg.DATASETS.TEST[0]
+
+        evaluator = COCOEvaluator(dataset_name, output_dir=str(ROOT / "runs" / "comparison"))
+        loader = build_detection_test_loader(cfg, dataset_name)
+        results = inference_on_dataset(predictor.model, loader, evaluator)
+
+        bbox = results.get("bbox", {})
+        ap50_95 = bbox.get("AP", float("nan")) / 100   # detectron2 returns 0-100 scale
+        ap50    = bbox.get("AP50", float("nan")) / 100
+        per_cls: dict[int, float] = {}
+        for cls_idx, cls_name in enumerate(COARSE_NAMES):
+            key = f"AP-{cls_name}"
+            if key in bbox:
+                per_cls[cls_idx] = bbox[key] / 100
+
+        # Inference time: measure on first 50 images via raw predictor
+        import time
+        from detectron2.data import DatasetCatalog
+        samples = DatasetCatalog.get(dataset_name)[:50]
+        t0 = time.perf_counter()
+        for s in samples:
+            import cv2
+            img = cv2.imread(s["file_name"])
+            predictor(img)
+        infer_ms = (time.perf_counter() - t0) / len(samples) * 1000
+
+        n_params = sum(p.numel() for p in predictor.model.parameters()) / 1e6
+
+        return {
+            "Model": self.label,
+            "mAP50": f"{ap50:.4f}",
+            "mAP50-95": f"{ap50_95:.4f}",
+            "Precision": "N/A",
+            "Recall": "N/A",
+            "Params(M)": f"{n_params:.1f}",
+            "Inference(ms)": f"{infer_ms:.1f}",
+            "per_class_ap50": per_cls,
+        }
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -172,8 +261,6 @@ def main():
                     help="FND classifier checkpoint (used with --with-fnd)")
     ap.add_argument("--imgsz", type=int, default=640)
     args = ap.parse_args()
-
-    from ultralytics import YOLO
 
     data_yaml = ROOT / args.data
     if not data_yaml.exists():
@@ -201,16 +288,42 @@ def main():
         if ":" not in spec:
             print(f"WARNING: skipping '{spec}' — expected TYPE:PATH format", file=sys.stderr)
             continue
-        model_type, ckpt_rel = spec.split(":", 1)
+
+        parts = spec.split(":", 2)
+        model_type = parts[0]
+
+        print(f"\n{'='*60}")
+
+        # ── Sparse R-CNN ──────────────────────────────────────────────────────
+        if model_type == "sparse_rcnn":
+            if len(parts) != 3:
+                print(
+                    f"WARNING: sparse_rcnn spec needs 3 parts: "
+                    f"sparse_rcnn:<config>:<checkpoint>  (got: {spec})",
+                    file=sys.stderr,
+                )
+                continue
+            evaluator = SparseRCNNEvaluator(config_rel=parts[1], ckpt_rel=parts[2])
+            print(f"Evaluating {evaluator.label} ...")
+            row = evaluator.evaluate()
+            if row is None:
+                continue
+            cls_ap50 = row.pop("per_class_ap50", {})
+            summary_rows.append(row)
+            per_class_results.append({"label": row["Model"], "per_class_ap50": cls_ap50})
+            continue
+
+        # ── YOLO (yolov8 / yolo11) ────────────────────────────────────────────
+        ckpt_rel = parts[1] if len(parts) > 1 else ""
         ckpt_path = ROOT / ckpt_rel
         if not ckpt_path.exists():
             print(f"WARNING: checkpoint not found, skipping: {ckpt_path}", file=sys.stderr)
             continue
 
         label = f"{model_type}:{ckpt_path.stem}"
-        print(f"\n{'='*60}")
         print(f"Evaluating {label} ...")
 
+        from ultralytics import YOLO
         model = YOLO(str(ckpt_path))
         model_nc = model.model.nc
         if model_nc != nc:
@@ -236,7 +349,7 @@ def main():
         # base inference time
         infer_ms = _measure_inference_ms(model, img_paths, args.imgsz)
 
-        row: dict = {
+        row = {
             "Model": label,
             "mAP50": f"{metrics.box.map50:.4f}",
             "mAP50-95": f"{metrics.box.map:.4f}",

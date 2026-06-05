@@ -101,21 +101,36 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## Deferred
+## In Progress
 
 ### Sparse R-CNN
-Sparse R-CNN (PeizeSun/SparseR-CNN) requires a **separate mmdetection/detectron2
-environment** that does not coexist with the Ultralytics environment used for
-Phases 1 and 2. Do not attempt to install it into the existing venv.
 
-Before any Sparse R-CNN training can run, two prerequisites must be completed:
+Scripts are written and smoke-tested. **One remaining blocker before training can run:**
+detectron2 environment setup on AWS (~45 min, build from source). Do NOT install
+detectron2 into the existing Ultralytics venv — they have conflicting torch version
+requirements in some configurations.
 
-1. **`scripts/coco_convert.py`** — converts our processed LISA (YOLO .txt) and
-   MTSD (per-image JSON) data to COCO JSON format. COCO bbox is
-   `[x_top_left, y_top_left, width, height]`, not YOLO's `[cx, cy, w, h]`.
-   Must also handle MTSD → coarse label remapping via `configs/mtsd_to_coarse.yaml`.
+**What's done:**
+- `scripts/coco_convert.py` — converts YOLO-format processed data to COCO JSON.
+  Uses `lisa_4class/train/labels/` (4 coarse classes) for LISA; `mtsd_coarse/` (5 classes).
+  Validates output with pycocotools. Smoke-tested: 4 categories, 100 images, 60 annotations.
+- `configs/sparse_rcnn_lisa.yaml` — detectron2 CfgNode config (4-class LISA, 3x schedule).
+- `configs/sparse_rcnn_register.py` — registers COCO datasets with detectron2's DatasetCatalog.
+- `scripts/train_sparse_rcnn.py` — DefaultTrainer launch script, `--smoke` flag.
+- `scripts/compare_models.py` — `SparseRCNNEvaluator` added; handles missing detectron2 gracefully.
 
-2. **Detectron2 environment setup** (~45 min on AWS, build from source).
+**AWS setup (TODO — do not modify aws_setup.sh tonight):**
+A separate detectron2 install block needs to be added to `aws_setup.sh`:
+```bash
+conda create -n sparsercnn python=3.9
+pip install torch torchvision
+pip install 'git+https://github.com/facebookresearch/detectron2.git'
+git clone https://github.com/PeizeSun/SparseR-CNN  # clone adjacent to this repo
+cd SparseR-CNN && pip install -r requirements.txt
+```
+Then run `coco_convert.py --dataset lisa` (and `--dataset mtsd_coarse` if needed)
+before the first training run.
 
-See `configs/sparse_rcnn.yaml` for the recommended base config, full data format
-notes, and AWS setup time estimates.
+See `configs/sparse_rcnn.yaml` for full data format notes and AWS time estimates.
+
+## Deferred
