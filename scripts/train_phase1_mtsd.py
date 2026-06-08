@@ -188,14 +188,18 @@ def main():
                     help="Full MTSD run init from overnight ckpt (batch=4, imgsz=416, 8 epochs, patience=20)")
     ap.add_argument("--production", action="store_true",
                     help="Production: yolov8m.pt ImageNet init, 200 epochs, patience=50, batch=16, imgsz=640")
+    ap.add_argument("--4class-only", dest="four_class_only", action="store_true",
+                    help="Accepted for command-line consistency; Phase 1 has only one production variant")
     args = ap.parse_args()
 
     from ultralytics import YOLO
 
-    print("Preparing coarse MTSD dataset ...")
-    mtsd_dir = ensure_coarse_dataset()
-
-    _, names = _load_coarse_cfg()
+    # --production --4class-only uses the pre-built subset (subset_mtsd.py).
+    # Every other mode needs the full coarse MTSD dataset.
+    if not (args.production and args.four_class_only):
+        print("Preparing coarse MTSD dataset ...")
+        mtsd_dir = ensure_coarse_dataset()
+        _, names = _load_coarse_cfg()
 
     patience = None  # ultralytics default (100); overridden for --full
 
@@ -222,7 +226,17 @@ def main():
         patience = 20
 
     elif args.production:
-        dataset_yaml  = _write_dataset_yaml(mtsd_dir, names)
+        if args.four_class_only:
+            dataset_yaml = CONFIGS / "mtsd_4class_subset.yaml"
+            if not dataset_yaml.exists():
+                raise FileNotFoundError(
+                    f"4-class subset config not found: {dataset_yaml}\n"
+                    "Run first: python scripts/subset_mtsd.py --4class-only"
+                )
+            # ~45-60 sec/epoch on T4 with 8K images at 640px; ~200 ep = ~3-4 hrs,
+            # early stop likely around ep 80
+        else:
+            dataset_yaml = _write_dataset_yaml(mtsd_dir, names)
         model_weights = "yolov8m.pt"  # ImageNet init; NOT the overnight nano ckpt (different arch)
         epochs, batch, imgsz, run_name = 200, args.batch, 640, "phase1_mtsd"
         patience = 50

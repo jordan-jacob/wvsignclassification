@@ -191,6 +191,8 @@ def main():
                     help="Quick validation: 2 epochs, 200 images, batch=4, imgsz=416")
     ap.add_argument("--production", action="store_true",
                     help="Production: 300 epochs, patience=50, batch=16, imgsz=640")
+    ap.add_argument("--4class-only", dest="four_class_only", action="store_true",
+                    help="Skip the 47-class variant; train only the 4-class coarse model")
     args = ap.parse_args()
 
     phase1_ckpt = ROOT / "checkpoints" / "phase1_mtsd_best.pt"
@@ -235,11 +237,14 @@ def main():
             print(f"\n*** PRODUCTION MODE: {epochs} epochs, patience={patience}, "
                   f"batch={batch}, imgsz={imgsz} ***")
 
-        # --- variant a: full 47-class ---
-        print("\n=== Phase 2a: full 47-class LISA ===")
-        full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
-        _train("full", full_yaml, phase1_ckpt, batch, epochs=epochs,
-               imgsz=imgsz, patience=patience)
+        if not args.four_class_only:
+            # --- variant a: full 47-class ---
+            print("\n=== Phase 2a: full 47-class LISA ===")
+            full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
+            _train("full", full_yaml, phase1_ckpt, batch, epochs=epochs,
+                   imgsz=imgsz, patience=patience)
+        else:
+            print("\n=== Skipping Phase 2a (--4class-only) ===")
 
         # --- variant b: 4-class ---
         print("\n=== Phase 2b: 4-class LISA ===")

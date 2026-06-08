@@ -1,0 +1,9 @@
+names:
+- stop
+- yield
+- warning
+- speed-limit
+nc: 4
+path: C:\Users\jrj00048\Projects\wvsignclassification\data\processed\mtsd_4class_subset
+train: train/images
+val: train/images

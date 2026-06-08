@@ -28,6 +28,7 @@ JUNCTION_DIRS = {
     PROCESSED / "lisa_4class" / "train" / "images",
     PROCESSED / "mtsd_coarse" / "train" / "images",
     PROCESSED / "mtsd_coarse" / "val" / "images",
+    PROCESSED / "mtsd_4class_subset" / "train" / "images",  # junction → mtsd/train/images
 }
 
 # Files YOLO regenerates automatically — never upload
@@ -103,6 +104,35 @@ def upload_batch(s3_client, bucket: str, files: list[tuple[Path, str]],
     return uploaded_bytes, skipped
 
 
+def collect_mtsd_subset_files() -> list[tuple[Path, str]]:
+    """
+    Collect files for --upload-mtsd-subset:
+    - Label files from mtsd_4class_subset/train/labels/ (real files)
+    - The 8K selected images from mtsd/train/images/ uploaded under
+      data/processed/mtsd_4class_subset/train/images/ keys in S3.
+
+    The local images/ directory is a junction, so we resolve actual image
+    paths by matching label file stems against the source images directory.
+    """
+    subset_dir = PROCESSED / "mtsd_4class_subset"
+    labels_dir = subset_dir / "train" / "labels"
+    src_images = PROCESSED / "mtsd" / "train" / "images"
+
+    result: list[tuple[Path, str]] = []
+
+    for lf in sorted(labels_dir.glob("*.txt")):
+        # label file
+        rel = lf.relative_to(PROJECT_ROOT).as_posix()
+        result.append((lf, rel))
+        # corresponding image (always .jpg in MTSD)
+        img = src_images / (lf.stem + ".jpg")
+        if img.exists():
+            img_key = f"data/processed/mtsd_4class_subset/train/images/{lf.stem}.jpg"
+            result.append((img, img_key))
+
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description="Upload processed data to S3")
     parser.add_argument("--bucket", required=True, help="S3 bucket name")
@@ -114,14 +144,18 @@ def main():
                         help="Upload checkpoints/")
     parser.add_argument("--upload-configs", action="store_true",
                         help="Upload configs/")
+    parser.add_argument("--upload-mtsd-subset", action="store_true",
+                        help="Upload data/processed/mtsd_4class_subset/ (labels + 8K images)")
     parser.add_argument("--upload-all", action="store_true",
                         help="Upload everything (all flags above)")
     args = parser.parse_args()
 
     if args.upload_all:
         args.upload_lisa = args.upload_mtsd = args.upload_checkpoints = args.upload_configs = True
+        args.upload_mtsd_subset = True
 
-    if not any([args.upload_lisa, args.upload_mtsd, args.upload_checkpoints, args.upload_configs]):
+    if not any([args.upload_lisa, args.upload_mtsd, args.upload_checkpoints,
+                args.upload_configs, args.upload_mtsd_subset]):
         parser.error("Specify at least one --upload-* flag or --upload-all")
 
     s3 = boto3.client("s3")
@@ -165,6 +199,18 @@ def main():
         up, sk = upload_batch(s3, args.bucket, files, label)
         total_uploaded += up
         total_skipped += sk
+
+    if args.upload_mtsd_subset:
+        files = collect_mtsd_subset_files()
+        n_labels = sum(1 for _, k in files if k.endswith(".txt"))
+        n_images = sum(1 for _, k in files if k.endswith(".jpg"))
+        label = f"MTSD 4-class subset ({n_images:,} images + {n_labels:,} labels, ~6.7 GB)"
+        if not files:
+            print(f"  {label}: no files found — run subset_mtsd.py first")
+        else:
+            up, sk = upload_batch(s3, args.bucket, files, label)
+            total_uploaded += up
+            total_skipped += sk
 
     print(f"\n{'='*50}")
     print(f"Total uploaded: {total_uploaded / 1e9:.2f} GB")
