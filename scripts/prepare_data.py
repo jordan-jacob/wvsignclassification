@@ -297,7 +297,33 @@ def main() -> None:
         action="store_true",
         help="Process only the first 100 images per dataset for a quick test.",
     )
+    ap.add_argument(
+        "--lisa-root",
+        help="Path to raw LISA data (default: data/lisa/ under repo root).",
+    )
+    ap.add_argument(
+        "--mtsd-root",
+        help="Path to raw MTSD data (default: data/mtsd/ under repo root).",
+    )
+    ap.add_argument(
+        "--output-root",
+        help="Where to write processed data (default: data/processed/ under repo root).",
+    )
     args = ap.parse_args()
+
+    global LISA_DIR, MTSD_DIR, OUT_DIR, _MTSD_BASE, MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS
+    if args.lisa_root:
+        LISA_DIR = Path(args.lisa_root)
+    if args.mtsd_root:
+        MTSD_DIR = Path(args.mtsd_root)
+        _MTSD_BASE = MTSD_DIR / "mtsd_fully_annotated_annotation" / "mtsd_v2_fully_annotated"
+        MTSD_ANN_DIR = _MTSD_BASE / "annotations"
+        MTSD_SPLITS_DIR = _MTSD_BASE / "splits"
+        MTSD_IMG_DIRS = [
+            MTSD_DIR / f"mtsd_fully_annotated_images.train.{i}" for i in range(3)
+        ] + [MTSD_DIR / "mtsd_fully_annotated_images.val"]
+    if args.output_root:
+        OUT_DIR = Path(args.output_root)
 
     if args.dry_run:
         print("DRY RUN: first 100 annotation entries per dataset")
