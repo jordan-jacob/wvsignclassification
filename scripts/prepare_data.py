@@ -38,6 +38,61 @@ MTSD_IMG_DIRS = [
 
 
 # ---------------------------------------------------------------------------
+# Path auto-detection
+# ---------------------------------------------------------------------------
+
+def _detect_lisa_root(root: Path) -> Path:
+    """Find allAnnotations.csv under root and return its parent as the effective LISA root."""
+    matches = list(root.rglob("allAnnotations.csv"))
+    if not matches:
+        raise FileNotFoundError(f"allAnnotations.csv not found under {root}")
+    if len(matches) > 1:
+        print(f"  Warning: multiple allAnnotations.csv found; using {matches[0]}")
+    return matches[0].parent
+
+
+def _detect_mtsd_paths(root: Path) -> tuple[Path, Path, list[Path]]:
+    """
+    Scan root and return (ann_dir, splits_dir, img_dirs).
+
+    ann_dir    — first directory containing 10+ .json files
+    splits_dir — parent of train.txt; fully-annotated variant preferred
+    img_dirs   — all directories containing 100+ .jpg files
+    """
+    # Splits: locate train.txt, prefer fully-annotated over partial
+    train_txts = list(root.rglob("train.txt"))
+    if not train_txts:
+        raise FileNotFoundError(f"train.txt not found under {root}")
+    fully = [p for p in train_txts if "fully" in str(p).lower()]
+    splits_dir = (fully[0] if fully else train_txts[0]).parent
+
+    # Annotations: first directory with 10+ .json files
+    ann_dir: Path | None = None
+    for f in root.rglob("*.json"):
+        parent = f.parent
+        if sum(1 for _ in parent.glob("*.json")) >= 10:
+            ann_dir = parent
+            break
+    if ann_dir is None:
+        raise FileNotFoundError(f"No directory with 10+ JSON files found under {root}")
+
+    # Images: all directories with 100+ .jpg files
+    seen: set[Path] = set()
+    img_dirs: list[Path] = []
+    for f in root.rglob("*.jpg"):
+        p = f.parent
+        if p in seen:
+            continue
+        seen.add(p)
+        if sum(1 for _ in p.glob("*.jpg")) >= 100:
+            img_dirs.append(p)
+    if not img_dirs:
+        raise FileNotFoundError(f"No image directories (100+ JPGs) found under {root}")
+
+    return ann_dir, splits_dir, img_dirs
+
+
+# ---------------------------------------------------------------------------
 # LISA
 # ---------------------------------------------------------------------------
 
@@ -311,22 +366,31 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    global LISA_DIR, MTSD_DIR, OUT_DIR, _MTSD_BASE, MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS
+    global LISA_DIR, MTSD_DIR, OUT_DIR, MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS
     if args.lisa_root:
         LISA_DIR = Path(args.lisa_root)
     if args.mtsd_root:
         MTSD_DIR = Path(args.mtsd_root)
-        _MTSD_BASE = MTSD_DIR / "mtsd_fully_annotated_annotation" / "mtsd_v2_fully_annotated"
-        MTSD_ANN_DIR = _MTSD_BASE / "annotations"
-        MTSD_SPLITS_DIR = _MTSD_BASE / "splits"
-        MTSD_IMG_DIRS = [
-            MTSD_DIR / f"mtsd_fully_annotated_images.train.{i}" for i in range(3)
-        ] + [MTSD_DIR / "mtsd_fully_annotated_images.val"]
     if args.output_root:
         OUT_DIR = Path(args.output_root)
 
+    print("\nDetecting LISA paths ...")
+    LISA_DIR = _detect_lisa_root(LISA_DIR)
+    print(f"  allAnnotations.csv : {LISA_DIR / 'allAnnotations.csv'}")
+    print(f"  categories.txt     : {LISA_DIR / 'categories.txt'}")
+    print(f"  image base         : {LISA_DIR}")
+
+    print("\nDetecting MTSD paths ...")
+    MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS = _detect_mtsd_paths(MTSD_DIR)
+    n_ann = sum(1 for _ in MTSD_ANN_DIR.glob("*.json"))
+    print(f"  annotations  : {MTSD_ANN_DIR}  ({n_ann:,} JSONs)")
+    print(f"  splits       : {MTSD_SPLITS_DIR}")
+    for d in MTSD_IMG_DIRS:
+        n_jpg = sum(1 for _ in d.glob("*.jpg"))
+        print(f"  images       : {d}  ({n_jpg:,} JPGs)")
+
     if args.dry_run:
-        print("DRY RUN: first 100 annotation entries per dataset")
+        print("\nDRY RUN: first 100 annotation entries per dataset")
 
     print("\nPreparing LISA ...")
     lisa_out = prepare_lisa(args.dry_run)
