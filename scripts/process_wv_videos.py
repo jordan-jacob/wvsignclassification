@@ -18,7 +18,7 @@ from pathlib import Path
 
 import cv2
 
-DOWNLOAD_LIST = "data/wv_download_list.csv"
+DOWNLOAD_LIST = "configs/wv_download_list.csv"
 TEMP_DIR = Path("data/raw/wvdoh/temp")
 FRAMES_ROOT = Path("data/raw/wvdoh_frames")
 PREANNO_DIR = Path("data/wvdoh_preannotations")

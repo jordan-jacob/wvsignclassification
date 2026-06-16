@@ -55,7 +55,7 @@ def main():
 
     # Map filename -> video_id from download list
     id_map = {}
-    dl_csv = Path("data/wv_download_list.csv")
+    dl_csv = Path("configs/wv_download_list.csv")
     if dl_csv.exists():
         for row in csv.DictReader(open(dl_csv)):
             id_map[row["filename"]] = row["video_id"]

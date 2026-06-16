@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 MANIFEST = "data/wvu_sample_manifest.csv"
-OUT_CSV = "data/wv_download_list.csv"
+OUT_CSV = "configs/wv_download_list.csv"
 OUT_SH = "scripts/download_wv_sample.sh"
 
 QUOTA = {
