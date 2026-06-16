@@ -259,8 +259,16 @@ def main():
     cand_dir.mkdir(parents=True, exist_ok=True)
     bg_dir.mkdir(parents=True, exist_ok=True)
 
+    # Startup diagnostics — makes path issues immediately obvious
+    children = list(frames_dir.iterdir()) if frames_dir.exists() else []
+    all_jpgs = list(frames_dir.rglob("*.jpg")) if frames_dir.exists() else []
+    print(f"frames_dir path: {frames_dir.resolve()}")
+    print(f"path exists: {frames_dir.exists()}")
+    print(f"direct children: {len(children)} items")
+    print(f"total jpgs found via rglob: {len(all_jpgs)}")
+
     video_meta = load_video_meta(args.dl_csv)
-    frames = sorted(frames_dir.glob("*.jpg"))
+    frames = sorted(frames_dir.rglob("*.jpg"))
 
     all_records = run_stage1(frames, args.checkpoint, video_meta)
 
