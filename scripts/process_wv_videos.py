@@ -40,12 +40,12 @@ def download_video(url, dest):
     return dest.stat().st_size / 1e6
 
 
-def extract_frames(video_path, out_dir, video_id, max_seconds=None):
-    """Extract at 1fps, naming {video_id}_{frame_number:06d}.jpg at JPEG 85."""
+def extract_frames(video_path, out_dir, video_id, max_seconds=None, target_fps=1.0):
+    """Extract at target_fps, naming {video_id}_{frame_number:06d}.jpg at JPEG 85."""
     out_dir.mkdir(parents=True, exist_ok=True)
     cap = cv2.VideoCapture(str(video_path))
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    interval = max(1, int(round(src_fps)))
+    interval = max(1, int(round(src_fps / target_fps)))
     encode_params = [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY]
 
     count = 0
@@ -69,7 +69,7 @@ def extract_frames(video_path, out_dir, video_id, max_seconds=None):
     return count
 
 
-def process_video(row, smoke):
+def process_video(row, smoke, fps=1.0):
     video_id = row["video_id"]
     county = row["primary_county"]
     road_type = row["sign_system_label"]
@@ -106,7 +106,7 @@ def process_video(row, smoke):
 
     max_seconds = 30 if smoke else None
     t0 = time.time()
-    n_frames = extract_frames(dest, out_dir, video_id, max_seconds)
+    n_frames = extract_frames(dest, out_dir, video_id, max_seconds, fps)
     elapsed = time.time() - t0
 
     dest.unlink()  # delete video immediately after extraction
@@ -228,6 +228,8 @@ def main():
                     help="first 3 videos only, first 30 seconds each")
     ap.add_argument("--conf", type=float, default=0.25,
                     help="detection confidence threshold (default 0.25)")
+    ap.add_argument("--fps", type=float, default=1.0,
+                    help="frames to extract per second of video (default 1)")
     args = ap.parse_args()
 
     if not args.preannotate_only:
@@ -235,7 +237,7 @@ def main():
         if args.smoke:
             rows = rows[:3]
         for row in rows:
-            process_video(row, smoke=args.smoke)
+            process_video(row, smoke=args.smoke, fps=args.fps)
 
     if not args.video_only:
         preannotate(conf=args.conf)
