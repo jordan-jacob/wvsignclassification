@@ -116,7 +116,7 @@ def main():
     ap.add_argument(
         "--images-dir",
         type=Path,
-        default=Path.home() / "Desktop" / "annotation_frames",
+        default=ROOT / "data" / "annotation_frames",
         help="Root of the annotation_frames directory (contains candidates/ and background/)",
     )
     ap.add_argument("--seed", type=int, default=SEED)
