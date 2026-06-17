@@ -26,6 +26,23 @@ using computer vision and image segmentation on dashcam video from WVDOH.
 - Geographic filtering of MTSD: NOT applied at pre-training;
   US label remapping applied at classification head training only
 
+## WV Taxonomy (Phase 3, 11 classes — configs/wv.yaml)
+chevron, curve, deerCrossing, guide, other, pedestrianCrossing,
+railroadCrossing, speedLimit, stop, warning, yield
+
+**Dropped classes — `missing_expected`, `occluded`:**
+Absence and occlusion detection cannot be resolved from a single image frame.
+Both require georeferencing against WVDOT's sign inventory (a planned separate
+component) to determine what sign *should* be present and whether it is blocked.
+Annotators confirmed these categories are not reliably identifiable visually
+per-frame. Boxes for these classes are discarded at data prep time.
+
+**Merged into `other`:** damaged, laneEnds, intersection, schoolZone,
+ruralCrossing_other — too few examples to train a reliable head, and the
+distinctions are lower priority for the initial Phase 3 model.
+
+Remapping is applied in `scripts/prepare_wv_data.py` (CLASS_REMAP dict).
+
 ## Repo structure
 scripts/        training and eval scripts
 notebooks/      EDA and visualization
