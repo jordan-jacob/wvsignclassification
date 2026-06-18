@@ -113,7 +113,7 @@ def class_score(row: dict, cls: str) -> float:
     """Score a candidate video for a specific target class."""
     rt_w = ROAD_TYPE_AFFINITY[cls].get(row["sign_system_label"], 1.0)
     ct_w = COUNTY_AFFINITY[cls][county_type(row["primary_county"])]
-    return rt_w * ct_w
+    return rt_w * ct_w * row.get("_geo_bonus", 1.0)
 
 
 # Per-class video budgets. Higher urgency (fewer existing instances) = more videos.
@@ -157,8 +157,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", type=Path, default=ROOT / "data" / "wvu_sample_manifest.csv")
     ap.add_argument("--download-list", type=Path, default=ROOT / "configs" / "wv_download_list.csv")
-    ap.add_argument("--out", type=Path, default=ROOT / "configs" / "wv_supplemental_download.csv")
-    ap.add_argument("--n", type=int, default=18,
+    ap.add_argument("--out", type=Path, default=ROOT / "configs" / "wv_supplemental_download_v2.csv")
+    ap.add_argument("--n", type=int, default=10,
                     help="Number of supplemental videos to select")
     ap.add_argument("--max-per-county", type=int, default=2,
                     help="Max videos per county in the supplemental batch")
@@ -170,16 +170,26 @@ def main():
         manifest = list(csv.DictReader(f))
     print(f"Manifest: {len(manifest)} videos")
 
-    # Load already-downloaded video_ids
+    # Load already-downloaded video_ids and counties
     with open(args.download_list, newline="") as f:
-        existing_ids = {row["video_id"] for row in csv.DictReader(f)}
-    print(f"Already downloaded: {len(existing_ids)} videos")
+        dl_rows = list(csv.DictReader(f))
+    existing_ids = {row["video_id"] for row in dl_rows}
+    existing_counties = {row["primary_county"] for row in dl_rows}
+    print(f"Already downloaded: {len(existing_ids)} videos across {len(existing_counties)} counties")
 
-    candidates = [r for r in manifest if r["video_id"] not in existing_ids]
-    print(f"Candidates: {len(candidates)} videos\n")
+    # Exclude already-downloaded and Municipal Non-State (too many traffic-light stops)
+    candidates = [
+        r for r in manifest
+        if r["video_id"] not in existing_ids
+        and r["sign_system_label"] != "Municipal Non-State"
+    ]
+    print(f"Candidates after exclusions: {len(candidates)} videos\n")
 
     for r in candidates:
         r["_ctype"] = county_type(r["primary_county"])
+        # 2x bonus for County Route videos in counties not yet in our set (geographic diversity)
+        is_new_county = r["primary_county"] not in existing_counties
+        r["_geo_bonus"] = 2.0 if (is_new_county and r["sign_system_label"] == "County Route") else 1.0
 
     # Compute per-class budgets (integer, sum to --n)
     raw = {cls: args.n * frac for cls, frac in CLASS_BUDGET_FRACTIONS.items()}

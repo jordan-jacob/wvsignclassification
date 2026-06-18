@@ -37,6 +37,7 @@ import numpy as np
 TOTAL_CANDIDATE_TARGET = 1000
 BACKGROUND_TARGET = 150
 BLUR_THRESHOLD = 50.0
+NEAR_DUPLICATE_THRESHOLD = 0.05  # skip if < 5% pixels changed vs last accepted frame from same video
 MIN_FRAMES_PER_VIDEO = 15
 COUNTY_ROUTE_FRACTION = 0.40
 CANDIDATE_FRACTION = 0.85  # used by incremental mode
@@ -209,6 +210,8 @@ def run_stage1(frames, checkpoint, video_meta):
     model = YOLO(checkpoint)
 
     records = []
+    last_frame_by_video = {}  # video_id -> last accepted frame array
+    skipped_dupes = 0
     print(f"Stage 1: scanning {len(frames)} frames...")
 
     for i, fp in enumerate(frames):
@@ -221,6 +224,17 @@ def run_stage1(frames, checkpoint, video_meta):
 
         vid_id = parse_video_id(fp.stem)
         meta = video_meta.get(vid_id, {"road_type": "Unknown", "county": "Unknown"})
+
+        # Near-duplicate check: skip if <5% pixels changed vs last accepted frame from this video
+        prev = last_frame_by_video.get(vid_id)
+        if prev is not None:
+            changed = np.mean(
+                np.any(np.abs(frame.astype(np.int16) - prev.astype(np.int16)) > 10, axis=2)
+            )
+            if changed < NEAR_DUPLICATE_THRESHOLD:
+                skipped_dupes += 1
+                continue
+        last_frame_by_video[vid_id] = frame
 
         # Blur check (reuse gray for contrast heuristic too)
         h = frame.shape[0]
@@ -252,6 +266,8 @@ def run_stage1(frames, checkpoint, video_meta):
             "is_sharp": is_sharp,
         })
 
+    if skipped_dupes:
+        print(f"  Near-duplicate frames skipped: {skipped_dupes}")
     return records
 
 
@@ -370,7 +386,7 @@ def main():
     # Resolve output dir
     if args.output_dir is None:
         args.output_dir = (
-            "data/annotation_frames_round2_bulk/" if args.target_total else "data/annotation_frames/"
+            "data/annotation_frames_bulk/" if args.target_total else "data/annotation_frames/"
         )
 
     rng = random.Random(args.seed)
@@ -472,7 +488,8 @@ def main():
     n_cand_sharp = len(candidates)
     n_final = len(selected_candidates)
     n_bg = len(selected_background)
-    est_hours = (n_final * 2 + n_bg * 0.5) / 60
+    n_total_new = n_final + n_bg
+    est_hours = n_total_new / 380
 
     print(f"\n{'=' * 50}")
     print(f"Total frames scanned:      {total_scanned:>6}")
@@ -480,9 +497,8 @@ def main():
     print(f"After blur filter:         {n_cand_sharp:>6}")
     print(f"Candidates selected:       {n_final:>6}")
     print(f"Background selected:       {n_bg:>6}")
-    print(f"Total new selection:       {n_final + n_bg:>6}")
-    print(f"Estimated annotation time: {est_hours:.1f} hrs")
-    print(f"  (candidates ~2 min/frame, background ~0.5 min/frame)")
+    print(f"Total new selection:       {n_total_new:>6}")
+    print(f"Estimated annotation time: {est_hours:.1f} hrs  ({n_total_new} frames @ 380 frames/hr)")
 
     if args.target_total:
         all_selected = selected_candidates + selected_background

@@ -18,6 +18,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import cv2
+import numpy as np
 
 DOWNLOAD_LIST = "configs/wv_download_list.csv"
 TEMP_DIR = Path("data/raw/wvdoh/temp")
@@ -26,6 +27,7 @@ PREANNO_DIR = Path("data/wvdoh_preannotations")
 CHECKPOINT = "checkpoints/phase2_full_best.pt"
 LOW_DISK_GB = 5.0
 JPEG_QUALITY = 85
+STATIONARY_THRESHOLD = 0.02  # skip frame if < 2% of pixels changed vs last saved
 
 
 def disk_free_gb():
@@ -51,6 +53,8 @@ def extract_frames(video_path, out_dir, video_id, max_seconds=None, target_fps=1
 
     count = 0
     frame_idx = 0
+    skipped_stationary = 0
+    last_saved = None
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -58,15 +62,26 @@ def extract_frames(video_path, out_dir, video_id, max_seconds=None, target_fps=1
         if max_seconds is not None and frame_idx >= int(max_seconds * src_fps):
             break
         if frame_idx % interval == 0:
+            if last_saved is not None:
+                changed = np.mean(
+                    np.any(np.abs(frame.astype(np.int16) - last_saved.astype(np.int16)) > 10, axis=2)
+                )
+                if changed < STATIONARY_THRESHOLD:
+                    skipped_stationary += 1
+                    frame_idx += 1
+                    continue
             cv2.imwrite(
                 str(out_dir / f"{video_id}_{count:06d}.jpg"),
                 frame,
                 encode_params,
             )
+            last_saved = frame
             count += 1
         frame_idx += 1
 
     cap.release()
+    if skipped_stationary:
+        print(f"  Skipped {skipped_stationary} stationary frames")
     return count
 
 
