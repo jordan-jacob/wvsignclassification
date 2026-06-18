@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import csv
 import random
 import shutil
 import urllib.parse
@@ -120,6 +121,12 @@ def main():
         help="Root of the annotation_frames directory (contains candidates/ and background/)",
     )
     ap.add_argument("--seed", type=int, default=SEED)
+    ap.add_argument(
+        "--clusters-file",
+        type=Path,
+        default=None,
+        help="CSV from dedupe_frames.py: enforces cluster-safe splits and deduplication",
+    )
     args = ap.parse_args()
 
     label_files = sorted((ANNO_DIR / "labels").glob("*.txt"))
@@ -165,13 +172,33 @@ def main():
 
     print(f"Usable pairs: {len(pairs)}")
 
-    # --- 80/20 split ---
-    random.seed(args.seed)
-    shuffled = pairs.copy()
-    random.shuffle(shuffled)
-    cut = int(0.8 * len(shuffled))
-    splits = {"train": shuffled[:cut], "val": shuffled[cut:]}
-    print(f"Train: {len(splits['train'])}   Val: {len(splits['val'])}")
+    # --- split ---
+    if args.clusters_file is not None:
+        cluster_info: dict[str, dict] = {}
+        with open(args.clusters_file, newline="") as f:
+            for row in csv.DictReader(f):
+                cluster_info[row["frame_stem"]] = row
+
+        not_in_csv = [img.stem for _, img in pairs if img.stem not in cluster_info]
+        if not_in_csv:
+            print(f"WARN: {len(not_in_csv)} frames not in clusters file; defaulting to train")
+
+        pairs = [(lf, img) for lf, img in pairs
+                 if cluster_info.get(img.stem, {}).get("keep", "True") != "False"]
+        print(f"After deduplication: {len(pairs)} pairs")
+
+        splits: dict[str, list] = {"train": [], "val": []}
+        for lf, img in pairs:
+            split = cluster_info.get(img.stem, {}).get("split", "train")
+            splits[split].append((lf, img))
+        print(f"Train: {len(splits['train'])}   Val: {len(splits['val'])}  (cluster-safe split)")
+    else:
+        random.seed(args.seed)
+        shuffled = pairs.copy()
+        random.shuffle(shuffled)
+        cut = int(0.8 * len(shuffled))
+        splits = {"train": shuffled[:cut], "val": shuffled[cut:]}
+        print(f"Train: {len(splits['train'])}   Val: {len(splits['val'])}")
 
     # --- wipe and recreate output dirs to avoid stale data ---
     if OUT_DIR.exists():
