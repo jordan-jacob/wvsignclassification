@@ -5,6 +5,7 @@ Optionally runs pre-annotation on all extracted frames.
 Usage:
   python scripts/process_wv_videos.py [--video-only] [--preannotate-only]
                                        [--video-id ID] [--smoke] [--conf FLOAT]
+                                       [--csv PATH]
 """
 
 import argparse
@@ -208,12 +209,13 @@ def preannotate(conf):
     print(f"YOLO labels       : {yolo_dir}/")
 
 
-def load_rows(video_id_filter=None):
-    rows = list(csv.DictReader(open(DOWNLOAD_LIST)))
+def load_rows(csv_path=None, video_id_filter=None):
+    path = csv_path or DOWNLOAD_LIST
+    rows = list(csv.DictReader(open(path)))
     if video_id_filter:
         rows = [r for r in rows if r["video_id"] == video_id_filter]
         if not rows:
-            raise SystemExit(f"video_id {video_id_filter!r} not found in {DOWNLOAD_LIST}")
+            raise SystemExit(f"video_id {video_id_filter!r} not found in {path}")
     return rows
 
 
@@ -230,10 +232,12 @@ def main():
                     help="detection confidence threshold (default 0.25)")
     ap.add_argument("--fps", type=float, default=1.0,
                     help="frames to extract per second of video (default 1)")
+    ap.add_argument("--csv", default=None,
+                    help="path to download list CSV (default: configs/wv_download_list.csv)")
     args = ap.parse_args()
 
     if not args.preannotate_only:
-        rows = load_rows(args.video_id)
+        rows = load_rows(csv_path=args.csv, video_id_filter=args.video_id)
         if args.smoke:
             rows = rows[:3]
         for row in rows:

@@ -12,6 +12,7 @@ One subfolder per class; manifest.csv covers all selected frames.
 Usage:
     python scripts/find_targeted_frames.py
     python scripts/find_targeted_frames.py --top-k 60 --conf 0.12
+    python scripts/find_targeted_frames.py --csv configs/wv_supplemental_download.csv
 """
 
 import argparse
@@ -117,6 +118,9 @@ def main():
     ap.add_argument("--output-dir", default="data/annotation_frames_round2/")
     ap.add_argument("--checkpoint", default="checkpoints/phase2_full_best.pt")
     ap.add_argument("--dl-csv", default="configs/wv_download_list.csv")
+    ap.add_argument("--csv", default=None,
+                    help="restrict scan to video_ids listed in this CSV (video_id column); "
+                         "scans data/raw/wvdoh_frames/{video_id}/ for each ID")
     ap.add_argument("--conf", type=float, default=0.15)
     ap.add_argument("--top-k", type=int, default=None,
                     help="Override top-k for all classes (default: per-class values in DEFAULT_TOP_K)")
@@ -142,7 +146,23 @@ def main():
 
     video_meta = load_video_meta(Path(args.dl_csv))
 
-    all_frames = sorted(frames_dir.rglob("*.jpg"))
+    # Collect frames: either from specific video_id subdirs (--csv) or full rglob
+    if args.csv is not None:
+        with open(args.csv, newline="") as f:
+            target_ids = [row["video_id"] for row in csv.DictReader(f)]
+        all_frames = []
+        for vid_id in target_ids:
+            vid_dir = frames_dir / vid_id
+            if vid_dir.is_dir():
+                all_frames.extend(sorted(vid_dir.glob("*.jpg")))
+            else:
+                # flat layout fallback: frames named {video_id}_*.jpg in frames_dir
+                all_frames.extend(sorted(frames_dir.glob(f"{vid_id}_*.jpg")))
+        all_frames.sort()
+        print(f"Scanning {len(target_ids)} video_ids from {args.csv}")
+    else:
+        all_frames = sorted(frames_dir.rglob("*.jpg"))
+
     frames = [f for f in all_frames if f.name not in annotated]
     print(f"Frames to scan: {len(frames)} (of {len(all_frames)} total)")
 
