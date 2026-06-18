@@ -489,8 +489,10 @@ def main():
                 "confidence":       round(score, 4),
             })
 
-    # Write output
-    output_dir.mkdir(parents=True, exist_ok=True)
+    # Write output — wipe first so consecutive runs don't accumulate
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
     manifest_rows = []
 
     print("\n--- Candidates found per target class ---")
