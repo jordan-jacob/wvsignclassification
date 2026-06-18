@@ -4,8 +4,8 @@ YOLO directory structure under data/processed/wv/ with an 80/20 train/val split.
 Also writes configs/wv.yaml and validates image/label pairing.
 
 Label filenames from Label Studio are URL-encoded paths of the form:
-  {hash}__candidates%5C{stem}.txt   ->  annotation_frames/candidates/{stem}.jpg
-  {hash}__background%5C{stem}.txt   ->  annotation_frames/background/{stem}.jpg
+  {hash}__candidates%5C{stem}.txt   ->  data/annotation_frames/candidates/{stem}.jpg
+  {hash}__background%5C{stem}.txt   ->  data/annotation_frames/background/{stem}.jpg
 
 Class remapping applied at conversion time (see CLAUDE.md § WV Taxonomy):
   - missing_expected, occluded : dropped entirely (boxes removed)
@@ -116,7 +116,7 @@ def main():
     ap.add_argument(
         "--images-dir",
         type=Path,
-        default=Path.home() / "Desktop" / "annotation_frames",
+        default=ROOT / "data" / "annotation_frames",
         help="Root of the annotation_frames directory (contains candidates/ and background/)",
     )
     ap.add_argument("--seed", type=int, default=SEED)
