@@ -156,7 +156,14 @@ def select_for_class(
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--manifest", type=Path, default=ROOT / "data" / "wvu_sample_manifest.csv")
-    ap.add_argument("--download-list", type=Path, default=ROOT / "configs" / "wv_download_list.csv")
+    ap.add_argument(
+        "--download-list", type=Path, nargs="+",
+        default=[
+            ROOT / "configs" / "wv_download_list.csv",
+            ROOT / "configs" / "wv_supplemental_download.csv",
+        ],
+        help="One or more existing download CSVs; video_ids from all are excluded",
+    )
     ap.add_argument("--out", type=Path, default=ROOT / "configs" / "wv_supplemental_download_v2.csv")
     ap.add_argument("--n", type=int, default=10,
                     help="Number of supplemental videos to select")
@@ -170,11 +177,17 @@ def main():
         manifest = list(csv.DictReader(f))
     print(f"Manifest: {len(manifest)} videos")
 
-    # Load already-downloaded video_ids and counties
-    with open(args.download_list, newline="") as f:
-        dl_rows = list(csv.DictReader(f))
-    existing_ids = {row["video_id"] for row in dl_rows}
-    existing_counties = {row["primary_county"] for row in dl_rows}
+    # Load already-downloaded video_ids and counties from all existing download CSVs
+    existing_ids: set[str] = set()
+    existing_counties: set[str] = set()
+    for dl_path in args.download_list:
+        if not dl_path.exists():
+            print(f"Warning: {dl_path} not found, skipping")
+            continue
+        with open(dl_path, newline="") as f:
+            for row in csv.DictReader(f):
+                existing_ids.add(row["video_id"])
+                existing_counties.add(row["primary_county"])
     print(f"Already downloaded: {len(existing_ids)} videos across {len(existing_counties)} counties")
 
     # Exclude already-downloaded and Municipal Non-State (too many traffic-light stops)
