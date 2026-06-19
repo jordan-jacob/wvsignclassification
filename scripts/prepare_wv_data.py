@@ -117,13 +117,16 @@ def run_merged(seed: int) -> None:
     image_dir = ROOT / "data" / "wv_merged" / "images_src"
 
     label_files = sorted(label_dir.glob("*.txt"))
-    print(f"Label files found: {len(label_files)}")
+    n_empty_labels = sum(1 for lf in label_files if not lf.read_text().strip())
+    n_nonempty_labels = len(label_files) - n_empty_labels
+    print(f"Label files found: {len(label_files)}  (empty: {n_empty_labels}, non-empty: {n_nonempty_labels})")
 
     image_index: dict[str, Path] = {
         p.stem: p
-        for p in image_dir.iterdir()
+        for p in image_dir.rglob("*")
         if p.suffix.lower() in (".jpg", ".jpeg", ".png")
     }
+    print(f"Images indexed: {len(image_index)}")
 
     pairs, missing_images = [], []
     for lf in label_files:
@@ -133,18 +136,17 @@ def run_merged(seed: int) -> None:
         else:
             pairs.append((lf, img))
 
-    if missing_images:
-        print(f"WARN: {len(missing_images)} labels have no matching image (skipped):")
-        for name in missing_images[:5]:
-            print(f"  {name}")
-        if len(missing_images) > 5:
-            print(f"  ... and {len(missing_images) - 5} more")
-
     empty = [(lf, img) for lf, img in pairs if not lf.read_text().strip()]
     nonempty = [(lf, img) for lf, img in pairs if lf.read_text().strip()]
-    print(f"Usable pairs: {len(pairs)}  (empty labels: {len(empty)}, non-empty: {len(nonempty)})")
+    print(f"Matched pairs: {len(pairs)}  (empty: {len(empty)}, non-empty: {len(nonempty)})")
+    print(f"Unmatched labels (no image): {len(missing_images)}")
     if pairs:
         print(f"Empty ratio: {len(empty)/len(pairs):.1%}")
+
+    if missing_images:
+        print(f"WARN: first 5 unmatched labels:")
+        for name in missing_images[:5]:
+            print(f"  {name}")
 
     # Stratified 80/20 on dominant post-remap class; empty labels split randomly
     random.seed(seed)
