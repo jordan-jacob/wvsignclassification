@@ -112,6 +112,105 @@ def remap_label(text: str) -> str:
     return "\n".join(out)
 
 
+def run_merged(seed: int) -> None:
+    label_dir = ROOT / "data" / "wv_merged" / "labels"
+    image_dir = ROOT / "data" / "wv_merged" / "images_src"
+
+    label_files = sorted(label_dir.glob("*.txt"))
+    print(f"Label files found: {len(label_files)}")
+
+    image_index: dict[str, Path] = {
+        p.stem: p
+        for p in image_dir.iterdir()
+        if p.suffix.lower() in (".jpg", ".jpeg", ".png")
+    }
+
+    pairs, missing_images = [], []
+    for lf in label_files:
+        img = image_index.get(lf.stem)
+        if img is None:
+            missing_images.append(lf.name)
+        else:
+            pairs.append((lf, img))
+
+    if missing_images:
+        print(f"WARN: {len(missing_images)} labels have no matching image (skipped):")
+        for name in missing_images[:5]:
+            print(f"  {name}")
+        if len(missing_images) > 5:
+            print(f"  ... and {len(missing_images) - 5} more")
+
+    empty = [(lf, img) for lf, img in pairs if not lf.read_text().strip()]
+    nonempty = [(lf, img) for lf, img in pairs if lf.read_text().strip()]
+    print(f"Usable pairs: {len(pairs)}  (empty labels: {len(empty)}, non-empty: {len(nonempty)})")
+    if pairs:
+        print(f"Empty ratio: {len(empty)/len(pairs):.1%}")
+
+    # Stratified 80/20 on dominant post-remap class; empty labels split randomly
+    random.seed(seed)
+    strata: dict[int, list] = defaultdict(list)
+    for lf, img in nonempty:
+        counts: dict[int, int] = defaultdict(int)
+        for line in remap_label(lf.read_text()).splitlines():
+            line = line.strip()
+            if line:
+                counts[int(line.split()[0])] += 1
+        dominant = max(counts, key=lambda k: counts[k]) if counts else -1
+        strata[dominant].append((lf, img))
+
+    train_pairs, val_pairs = [], []
+    for group in strata.values():
+        random.shuffle(group)
+        cut = max(1, int(0.8 * len(group)))
+        train_pairs.extend(group[:cut])
+        val_pairs.extend(group[cut:])
+
+    random.shuffle(empty)
+    cut = int(0.8 * len(empty))
+    train_pairs.extend(empty[:cut])
+    val_pairs.extend(empty[cut:])
+
+    print(f"Train: {len(train_pairs)}   Val: {len(val_pairs)}")
+
+    if OUT_DIR.exists():
+        shutil.rmtree(OUT_DIR)
+
+    for split_name, split_pairs in [("train", train_pairs), ("val", val_pairs)]:
+        img_out = OUT_DIR / split_name / "images"
+        lbl_out = OUT_DIR / split_name / "labels"
+        img_out.mkdir(parents=True, exist_ok=True)
+        lbl_out.mkdir(parents=True, exist_ok=True)
+        for lf, img in split_pairs:
+            shutil.copy2(img, img_out / img.name)
+            (lbl_out / (img.stem + ".txt")).write_text(remap_label(lf.read_text()))
+
+    class_counts: dict[int, int] = defaultdict(int)
+    for lf, _ in pairs:
+        for line in remap_label(lf.read_text()).splitlines():
+            line = line.strip()
+            if line:
+                class_counts[int(line.split()[0])] += 1
+
+    print("\nClass distribution after remapping (instances across all pairs):")
+    total_instances = sum(class_counts.values())
+    for i, cls in enumerate(NEW_CLASSES):
+        count = class_counts.get(i, 0)
+        warn = "  *** LOW-SAMPLE WARNING (<10)" if count < LOW_SAMPLE_THRESHOLD else ""
+        print(f"  {i:2d}  {cls:<25}  {count:5d}{warn}")
+    print(f"      {'TOTAL':<25}  {total_instances:5d}")
+
+    config = {
+        "path": str(OUT_DIR.resolve()),
+        "train": "train/images",
+        "val": "val/images",
+        "nc": len(NEW_CLASSES),
+        "names": NEW_CLASSES,
+    }
+    CONFIG_PATH.write_text(yaml.dump(config, default_flow_style=False, allow_unicode=True))
+    print(f"\nWrote {CONFIG_PATH}")
+    print(f"Output: {OUT_DIR}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument(
@@ -127,7 +226,16 @@ def main():
         default=None,
         help="CSV from dedupe_frames.py: enforces cluster-safe splits and deduplication",
     )
+    ap.add_argument(
+        "--merged",
+        action="store_true",
+        help="Process pre-decoded labels from data/wv_merged/ (no URL decoding or subdir parsing)",
+    )
     args = ap.parse_args()
+
+    if args.merged:
+        run_merged(args.seed)
+        return
 
     label_files = sorted((ANNO_DIR / "labels").glob("*.txt"))
     print(f"Label files found: {len(label_files)}")
