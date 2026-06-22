@@ -147,7 +147,16 @@ def prepare_lisa(dry_run: bool):
     rng = random.Random(42)
     rng.shuffle(keys)
     split_idx = int(len(keys) * 0.85)
-    splits = [("train", keys[:split_idx]), ("val", keys[split_idx:])]
+    train_keys, val_keys = keys[:split_idx], keys[split_idx:]
+    assert not (set(train_keys) & set(val_keys)), "train/val sets overlap — logic error"
+    splits = [("train", train_keys), ("val", val_keys)]
+
+    # Wipe output dirs so stale files from previous runs can't contaminate splits
+    for split_name in ("train", "val"):
+        for sub in ("images", "labels"):
+            d = OUT_DIR / "lisa" / split_name / sub
+            if d.exists():
+                shutil.rmtree(d)
 
     n_imgs = n_boxes = 0
     counts: Counter = Counter()
