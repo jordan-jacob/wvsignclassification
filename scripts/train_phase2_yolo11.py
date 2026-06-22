@@ -47,6 +47,12 @@ LISA_4CLASS: dict[str, int | None] = {
 COARSE_NAMES = ["stop", "yield", "warning", "speed-limit"]
 
 
+def _push_checkpoint(path: Path) -> None:
+    subprocess.run(["git", "add", str(path)], cwd=ROOT, check=False)
+    subprocess.run(["git", "commit", "-m", f"Add checkpoint {path.name}"], cwd=ROOT, check=False)
+    subprocess.run(["git", "push"], cwd=ROOT, check=False)
+
+
 def _check_yolo11_support():
     try:
         import ultralytics
@@ -182,6 +188,7 @@ def _train(variant: str, data_yaml: Path, batch: int,
     best = ROOT / "runs" / f"phase2_yolo11_{variant}" / "weights" / "best.pt"
     dest = ckpt_dir / ckpt_name
     shutil.copy(best, dest)
+    _push_checkpoint(dest)
     return dest
 
 

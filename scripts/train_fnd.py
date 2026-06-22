@@ -16,6 +16,7 @@ Flags
 --smoke      : 50 images, 2 epochs
 """
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -296,6 +297,9 @@ def main():
     else:
         print(f"\nTraining complete: {epochs} epochs. "
               f"Best loss={best_loss:.4f}. Saved: {out}")
+    subprocess.run(["git", "add", str(out)], cwd=ROOT, check=False)
+    subprocess.run(["git", "commit", "-m", f"Add checkpoint {out.name}"], cwd=ROOT, check=False)
+    subprocess.run(["git", "push"], cwd=ROOT, check=False)
 
 
 if __name__ == "__main__":

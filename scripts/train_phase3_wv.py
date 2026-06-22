@@ -14,6 +14,7 @@ Flags
 
 import argparse
 import shutil
+import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -112,6 +113,9 @@ def main():
     best = ROOT / "runs" / run_name / "weights" / "best.pt"
     out_ckpt.parent.mkdir(exist_ok=True)
     shutil.copy(best, out_ckpt)
+    subprocess.run(["git", "add", str(out_ckpt)], cwd=ROOT, check=False)
+    subprocess.run(["git", "commit", "-m", f"Add checkpoint {out_ckpt.name}"], cwd=ROOT, check=False)
+    subprocess.run(["git", "push"], cwd=ROOT, check=False)
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ default      : original full run          (yolov8m, batch=<--batch>, imgsz=640, 
 import argparse
 import random
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -21,6 +22,12 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 CONFIGS = ROOT / "configs"
 PROCESSED = ROOT / "data" / "processed"
+
+
+def _push_checkpoint(path: Path) -> None:
+    subprocess.run(["git", "add", str(path)], cwd=ROOT, check=False)
+    subprocess.run(["git", "commit", "-m", f"Add checkpoint {path.name}"], cwd=ROOT, check=False)
+    subprocess.run(["git", "push"], cwd=ROOT, check=False)
 
 
 def _load_coarse_cfg():
@@ -310,6 +317,7 @@ def main():
     dest = ckpt_dir / ckpt_name
     shutil.copy(best, dest)
     print(f"Saved: {dest}")
+    _push_checkpoint(dest)
     if args.overnight or args.full:
         print()
         print("To use this checkpoint for phase 2, run:")
