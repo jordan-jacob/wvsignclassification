@@ -17,6 +17,7 @@ YOLOv8 label format: one .txt per image, each line is
 import argparse
 import csv
 import json
+import random
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -139,41 +140,50 @@ def prepare_lisa(dry_run: bool):
 
     cls_idx = {c: i for i, c in enumerate(classes)}
 
-    out_img = OUT_DIR / "lisa" / "train" / "images"
-    out_lbl = OUT_DIR / "lisa" / "train" / "labels"
-    out_img.mkdir(parents=True, exist_ok=True)
-    out_lbl.mkdir(parents=True, exist_ok=True)
+    # Deterministic 85/15 train/val split (LISA has no official split)
+    keys = sorted(image_boxes)
+    if dry_run:
+        keys = keys[:100]
+    rng = random.Random(42)
+    rng.shuffle(keys)
+    split_idx = int(len(keys) * 0.85)
+    splits = [("train", keys[:split_idx]), ("val", keys[split_idx:])]
 
-    keys = list(image_boxes)[:100] if dry_run else list(image_boxes)
     n_imgs = n_boxes = 0
     counts: Counter = Counter()
     missing: list[str] = []
 
-    for rel in keys:
-        src = LISA_DIR / rel
-        if not src.exists():
-            missing.append(rel)
-            continue
+    for split_name, split_keys in splits:
+        out_img = OUT_DIR / "lisa" / split_name / "images"
+        out_lbl = OUT_DIR / "lisa" / split_name / "labels"
+        out_img.mkdir(parents=True, exist_ok=True)
+        out_lbl.mkdir(parents=True, exist_ok=True)
 
-        with Image.open(src) as im:
-            W, H = im.size
+        for rel in split_keys:
+            src = LISA_DIR / rel
+            if not src.exists():
+                missing.append(rel)
+                continue
 
-        # Flatten path to avoid collisions from different subdirectories
-        slug = rel.replace("/", "__").replace("\\", "__")
-        shutil.copy2(src, out_img / slug)
+            with Image.open(src) as im:
+                W, H = im.size
 
-        lines = []
-        for tag, x1, y1, x2, y2 in image_boxes[rel]:
-            xc = ((x1 + x2) / 2) / W
-            yc = ((y1 + y2) / 2) / H
-            w, h = (x2 - x1) / W, (y2 - y1) / H
-            ci = cls_idx[tag]
-            lines.append(f"{ci} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
-            counts[tag] += 1
-            n_boxes += 1
+            # Flatten path to avoid collisions from different subdirectories
+            slug = rel.replace("/", "__").replace("\\", "__")
+            shutil.copy2(src, out_img / slug)
 
-        (out_lbl / (Path(slug).stem + ".txt")).write_text("\n".join(lines))
-        n_imgs += 1
+            lines = []
+            for tag, x1, y1, x2, y2 in image_boxes[rel]:
+                xc = ((x1 + x2) / 2) / W
+                yc = ((y1 + y2) / 2) / H
+                w, h = (x2 - x1) / W, (y2 - y1) / H
+                ci = cls_idx[tag]
+                lines.append(f"{ci} {xc:.6f} {yc:.6f} {w:.6f} {h:.6f}")
+                counts[tag] += 1
+                n_boxes += 1
+
+            (out_lbl / (Path(slug).stem + ".txt")).write_text("\n".join(lines))
+            n_imgs += 1
 
     return n_imgs, n_boxes, counts, classes, missing
 
@@ -273,6 +283,7 @@ def write_configs(lisa_cls: list[str], mtsd_cls: list[str] | None) -> None:
     (CFG_DIR / "lisa.yaml").write_text(
         f"path: {OUT_DIR / 'lisa'}\n"
         f"train: train/images\n"
+        f"val: val/images\n"
         f"nc: {len(lisa_cls)}\n"
         + _names_block(lisa_cls)
     )
