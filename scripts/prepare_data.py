@@ -267,7 +267,7 @@ def _names_block(classes: list[str]) -> str:
     return "names:\n" + "".join(f"  - {c}\n" for c in classes)
 
 
-def write_configs(lisa_cls: list[str], mtsd_cls: list[str]) -> None:
+def write_configs(lisa_cls: list[str], mtsd_cls: list[str] | None) -> None:
     CFG_DIR.mkdir(parents=True, exist_ok=True)
 
     (CFG_DIR / "lisa.yaml").write_text(
@@ -276,37 +276,41 @@ def write_configs(lisa_cls: list[str], mtsd_cls: list[str]) -> None:
         f"nc: {len(lisa_cls)}\n"
         + _names_block(lisa_cls)
     )
+    written = [CFG_DIR / "lisa.yaml"]
 
-    (CFG_DIR / "mtsd.yaml").write_text(
-        f"path: {OUT_DIR / 'mtsd'}\n"
-        f"train: train/images\n"
-        f"val: val/images\n"
-        f"nc: {len(mtsd_cls)}\n"
-        + _names_block(mtsd_cls)
-    )
+    if mtsd_cls is not None:
+        (CFG_DIR / "mtsd.yaml").write_text(
+            f"path: {OUT_DIR / 'mtsd'}\n"
+            f"train: train/images\n"
+            f"val: val/images\n"
+            f"nc: {len(mtsd_cls)}\n"
+            + _names_block(mtsd_cls)
+        )
 
-    # LISA taxonomy used for the combined config.
-    # MTSD label strings won't match LISA class indices — use configs/mtsd.yaml
-    # for MTSD-only pre-training.
-    (CFG_DIR / "data.yaml").write_text(
-        f"# Combined paths; LISA class taxonomy.\n"
-        f"# For MTSD pre-training use configs/mtsd.yaml — its labels differ.\n"
-        f"path: {OUT_DIR}\n"
-        f"train:\n"
-        f"  - lisa/train/images\n"
-        f"  - mtsd/train/images\n"
-        f"val: mtsd/val/images\n"
-        f"nc: {len(lisa_cls)}\n"
-        + _names_block(lisa_cls)
-    )
+        # LISA taxonomy used for the combined config.
+        # MTSD label strings won't match LISA class indices — use configs/mtsd.yaml
+        # for MTSD-only pre-training.
+        (CFG_DIR / "data.yaml").write_text(
+            f"# Combined paths; LISA class taxonomy.\n"
+            f"# For MTSD pre-training use configs/mtsd.yaml — its labels differ.\n"
+            f"path: {OUT_DIR}\n"
+            f"train:\n"
+            f"  - lisa/train/images\n"
+            f"  - mtsd/train/images\n"
+            f"val: mtsd/val/images\n"
+            f"nc: {len(lisa_cls)}\n"
+            + _names_block(lisa_cls)
+        )
+        written += [CFG_DIR / "mtsd.yaml", CFG_DIR / "data.yaml"]
 
-    # Plain class lists for the verify script
+        (OUT_DIR / "mtsd").mkdir(parents=True, exist_ok=True)
+        (OUT_DIR / "mtsd" / "classes.txt").write_text("\n".join(mtsd_cls))
+
+    # Plain class list for the verify script
     (OUT_DIR / "lisa").mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "mtsd").mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "lisa" / "classes.txt").write_text("\n".join(lisa_cls))
-    (OUT_DIR / "mtsd" / "classes.txt").write_text("\n".join(mtsd_cls))
 
-    for p in [CFG_DIR / "lisa.yaml", CFG_DIR / "mtsd.yaml", CFG_DIR / "data.yaml"]:
+    for p in written:
         print(f"  wrote {p.relative_to(ROOT)}")
 
 
@@ -364,6 +368,11 @@ def main() -> None:
         "--output-root",
         help="Where to write processed data (default: data/processed/ under repo root).",
     )
+    ap.add_argument(
+        "--lisa-only",
+        action="store_true",
+        help="Skip all MTSD processing; only run the LISA pipeline.",
+    )
     args = ap.parse_args()
 
     global LISA_DIR, MTSD_DIR, OUT_DIR, MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS
@@ -380,14 +389,15 @@ def main() -> None:
     print(f"  categories.txt     : {LISA_DIR / 'categories.txt'}")
     print(f"  image base         : {LISA_DIR}")
 
-    print("\nDetecting MTSD paths ...")
-    MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS = _detect_mtsd_paths(MTSD_DIR)
-    n_ann = sum(1 for _ in MTSD_ANN_DIR.glob("*.json"))
-    print(f"  annotations  : {MTSD_ANN_DIR}  ({n_ann:,} JSONs)")
-    print(f"  splits       : {MTSD_SPLITS_DIR}")
-    for d in MTSD_IMG_DIRS:
-        n_jpg = sum(1 for _ in d.glob("*.jpg"))
-        print(f"  images       : {d}  ({n_jpg:,} JPGs)")
+    if not args.lisa_only:
+        print("\nDetecting MTSD paths ...")
+        MTSD_ANN_DIR, MTSD_SPLITS_DIR, MTSD_IMG_DIRS = _detect_mtsd_paths(MTSD_DIR)
+        n_ann = sum(1 for _ in MTSD_ANN_DIR.glob("*.json"))
+        print(f"  annotations  : {MTSD_ANN_DIR}  ({n_ann:,} JSONs)")
+        print(f"  splits       : {MTSD_SPLITS_DIR}")
+        for d in MTSD_IMG_DIRS:
+            n_jpg = sum(1 for _ in d.glob("*.jpg"))
+            print(f"  images       : {d}  ({n_jpg:,} JPGs)")
 
     if args.dry_run:
         print("\nDRY RUN: first 100 annotation entries per dataset")
@@ -396,15 +406,19 @@ def main() -> None:
     lisa_out = prepare_lisa(args.dry_run)
     print(f"  {lisa_out[0]:,} images, {lisa_out[1]:,} boxes")
 
-    print("\nPreparing MTSD ...")
-    mtsd_out = prepare_mtsd(args.dry_run)
-    print(f"  {mtsd_out[0]:,} images, {mtsd_out[1]:,} boxes")
+    mtsd_cls = None
+    if not args.lisa_only:
+        print("\nPreparing MTSD ...")
+        mtsd_out = prepare_mtsd(args.dry_run)
+        print(f"  {mtsd_out[0]:,} images, {mtsd_out[1]:,} boxes")
+        mtsd_cls = mtsd_out[3]
 
     print("\nWriting configs ...")
-    write_configs(lisa_out[3], mtsd_out[3])
+    write_configs(lisa_out[3], mtsd_cls)
 
     _print_summary("LISA", *lisa_out)
-    _print_summary("MTSD", *mtsd_out)
+    if not args.lisa_only:
+        _print_summary("MTSD", *mtsd_out)
 
 
 if __name__ == "__main__":
