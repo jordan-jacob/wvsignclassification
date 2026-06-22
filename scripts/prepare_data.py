@@ -56,18 +56,40 @@ def _detect_mtsd_paths(root: Path) -> tuple[Path, Path, list[Path]]:
     """
     Scan root and return (ann_dir, splits_dir, img_dirs).
 
-    ann_dir    — first directory containing 10+ .json files
-    splits_dir — parent of train.txt; fully-annotated variant preferred
-    img_dirs   — all directories containing 100+ .jpg files
+    Tries the known Kaggle layout first (fast); falls back to rglob.
+
+    Kaggle layout (directories named *.zip are actual directories):
+      <root>/mtsd_v2_fully_annotated_annotation.zip/mtsd_v2_fully_annotated/annotations/
+      <root>/mtsd_v2_fully_annotated_annotation.zip/mtsd_v2_fully_annotated/splits/
+      <root>/mtsd_fully_annotated_train_images/images/
+      <root>/mtsd_v2_fully_annotated_images.val.zip/<anything>/*.jpg
     """
-    # Splits: locate train.txt, prefer fully-annotated over partial
+    # Fast path: known Kaggle directory layout
+    kaggle_base = root / "mtsd_v2_fully_annotated_annotation.zip" / "mtsd_v2_fully_annotated"
+    kaggle_ann = kaggle_base / "annotations"
+    kaggle_splits = kaggle_base / "splits"
+    kaggle_train_imgs = root / "mtsd_fully_annotated_train_images" / "images"
+
+    if kaggle_ann.is_dir() and kaggle_splits.is_dir() and kaggle_train_imgs.is_dir():
+        val_root = root / "mtsd_v2_fully_annotated_images.val.zip"
+        val_img_dirs: list[Path] = []
+        if val_root.is_dir():
+            seen: set[Path] = set()
+            for f in val_root.rglob("*.jpg"):
+                p = f.parent
+                if p not in seen:
+                    seen.add(p)
+                    if sum(1 for _ in p.glob("*.jpg")) >= 10:
+                        val_img_dirs.append(p)
+        return kaggle_ann, kaggle_splits, [kaggle_train_imgs] + val_img_dirs
+
+    # Fallback: rglob scan
     train_txts = list(root.rglob("train.txt"))
     if not train_txts:
         raise FileNotFoundError(f"train.txt not found under {root}")
     fully = [p for p in train_txts if "fully" in str(p).lower()]
     splits_dir = (fully[0] if fully else train_txts[0]).parent
 
-    # Annotations: first directory with 10+ .json files
     ann_dir: Path | None = None
     for f in root.rglob("*.json"):
         parent = f.parent
@@ -77,14 +99,13 @@ def _detect_mtsd_paths(root: Path) -> tuple[Path, Path, list[Path]]:
     if ann_dir is None:
         raise FileNotFoundError(f"No directory with 10+ JSON files found under {root}")
 
-    # Images: all directories with 100+ .jpg files
-    seen: set[Path] = set()
+    seen2: set[Path] = set()
     img_dirs: list[Path] = []
     for f in root.rglob("*.jpg"):
         p = f.parent
-        if p in seen:
+        if p in seen2:
             continue
-        seen.add(p)
+        seen2.add(p)
         if sum(1 for _ in p.glob("*.jpg")) >= 100:
             img_dirs.append(p)
     if not img_dirs:
