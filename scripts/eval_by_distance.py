@@ -13,6 +13,9 @@ Outputs:
   2. Recall table: Class x Size  (with GT counts)
   3. "Exclude distant" summary for stop and speedLimit
 """
+import argparse
+import gc
+import random
 from collections import defaultdict
 from pathlib import Path
 
@@ -87,7 +90,20 @@ def _compute_ap50(dets, n_gt: int) -> float:
     return float(np.sum((rec[idx + 1] - rec[idx]) * prec[idx + 1]))
 
 
+BATCH_SIZE = 8
+
+
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--max-images", type=int, default=200,
+                    help="Random sample of val images to evaluate (default: 200, 0=all)")
+    args = ap.parse_args()
+
+    import psutil
+    available_gb = psutil.virtual_memory().available / 1e9
+    if available_gb < 4:
+        print(f"WARNING: only {available_gb:.1f}GB RAM available — consider closing other processes")
+
     if not CHECKPOINT.exists():
         raise FileNotFoundError(f"Checkpoint not found: {CHECKPOINT}")
     if not VAL_IMAGES.exists():
@@ -106,58 +122,70 @@ def main():
     gt_counts: dict = defaultdict(lambda: defaultdict(int))
 
     img_files = sorted(VAL_IMAGES.glob("*.*"))
-    print(f"Running inference on {len(img_files)} images ...")
+    if args.max_images and len(img_files) > args.max_images:
+        random.seed(42)
+        img_files = random.sample(img_files, args.max_images)
+        print(f"Sampled {args.max_images} of {len(sorted(VAL_IMAGES.glob('*.*')))} val images (--max-images={args.max_images})")
+    print(f"Running inference on {len(img_files)} images (CPU, batch={BATCH_SIZE}) ...")
 
-    for r in model.predict(
-        [str(p) for p in img_files],
-        conf=CONF_THRESH,
-        stream=True,
-        verbose=False,
-    ):
-        img_path = Path(r.path)
-        label_path = VAL_LABELS / (img_path.stem + ".txt")
-        gt = _load_gt(label_path, nc)
+    import torch
+    for batch_start in range(0, len(img_files), BATCH_SIZE):
+        batch = img_files[batch_start:batch_start + BATCH_SIZE]
+        for r in model.predict(
+            [str(p) for p in batch],
+            conf=CONF_THRESH,
+            device="cpu",
+            stream=True,
+            verbose=False,
+        ):
+            img_path = Path(r.path)
+            label_path = VAL_LABELS / (img_path.stem + ".txt")
+            gt = _load_gt(label_path, nc)
 
-        # Count GT by (cls, bucket)
-        for cls, cx, cy, w, h in gt:
-            gt_counts[cls][_bucket(w * h)] += 1
+            # Count GT by (cls, bucket)
+            for cls, cx, cy, w, h in gt:
+                gt_counts[cls][_bucket(w * h)] += 1
 
-        # Extract predictions: (cls, cx, cy, w, h, conf)
-        boxes = r.boxes
-        preds = []
-        if boxes is not None and len(boxes):
-            xywhn = boxes.xywhn.cpu().numpy()
-            confs = boxes.conf.cpu().numpy()
-            clss = boxes.cls.cpu().numpy().astype(int)
-            for i in range(len(boxes)):
-                preds.append((int(clss[i]), *xywhn[i], float(confs[i])))
+            # Extract predictions: (cls, cx, cy, w, h, conf)
+            boxes = r.boxes
+            preds = []
+            if boxes is not None and len(boxes):
+                xywhn = boxes.xywhn.cpu().numpy()
+                confs = boxes.conf.cpu().numpy()
+                clss = boxes.cls.cpu().numpy().astype(int)
+                for i in range(len(boxes)):
+                    preds.append((int(clss[i]), *xywhn[i], float(confs[i])))
 
-        # Greedy match preds to GT per class (high-conf first)
-        gt_matched = [False] * len(gt)
-        # Sort preds by conf descending
-        preds_sorted = sorted(preds, key=lambda x: -x[5])
+            # Greedy match preds to GT per class (high-conf first)
+            gt_matched = [False] * len(gt)
+            preds_sorted = sorted(preds, key=lambda x: -x[5])
 
-        for cls_p, cx_p, cy_p, w_p, h_p, conf_p in preds_sorted:
-            box_p = _xywh_to_xyxy(cx_p, cy_p, w_p, h_p)
-            best_iou = IOU_THRESH
-            best_gi = -1
-            for gi, (cls_g, cx_g, cy_g, w_g, h_g) in enumerate(gt):
-                if cls_g != cls_p or gt_matched[gi]:
-                    continue
-                iou_val = _iou(box_p, _xywh_to_xyxy(cx_g, cy_g, w_g, h_g))
-                if iou_val > best_iou:
-                    best_iou = iou_val
-                    best_gi = gi
+            for cls_p, cx_p, cy_p, w_p, h_p, conf_p in preds_sorted:
+                box_p = _xywh_to_xyxy(cx_p, cy_p, w_p, h_p)
+                best_iou = IOU_THRESH
+                best_gi = -1
+                for gi, (cls_g, cx_g, cy_g, w_g, h_g) in enumerate(gt):
+                    if cls_g != cls_p or gt_matched[gi]:
+                        continue
+                    iou_val = _iou(box_p, _xywh_to_xyxy(cx_g, cy_g, w_g, h_g))
+                    if iou_val > best_iou:
+                        best_iou = iou_val
+                        best_gi = gi
 
-            if best_gi >= 0:
-                gt_matched[best_gi] = True
-                _, cx_g, cy_g, w_g, h_g = gt[best_gi]
-                bucket = _bucket(w_g * h_g)
-                dets[cls_p][bucket].append((conf_p, True))
-            else:
-                # FP: assign to bucket based on pred's own size
-                bucket = _bucket(w_p * h_p)
-                dets[cls_p][bucket].append((conf_p, False))
+                if best_gi >= 0:
+                    gt_matched[best_gi] = True
+                    _, cx_g, cy_g, w_g, h_g = gt[best_gi]
+                    bucket = _bucket(w_g * h_g)
+                    dets[cls_p][bucket].append((conf_p, True))
+                else:
+                    # FP: assign to bucket based on pred's own size
+                    bucket = _bucket(w_p * h_p)
+                    dets[cls_p][bucket].append((conf_p, False))
+        torch.cuda.empty_cache()
+
+    del model
+    torch.cuda.empty_cache()
+    gc.collect()
 
     print("Computing metrics ...\n")
 
