@@ -25,9 +25,11 @@ PROCESSED = ROOT / "data" / "processed"
 
 
 def _push_checkpoint(path: Path) -> None:
-    subprocess.run(["git", "add", str(path)], cwd=ROOT, check=False)
-    subprocess.run(["git", "commit", "-m", f"Add checkpoint {path.name}"], cwd=ROOT, check=False)
-    subprocess.run(["git", "push"], cwd=ROOT, check=False)
+    subprocess.run(
+        ["bash", str(ROOT / "scripts" / "save_checkpoint_to_github.sh"),
+         str(path), f"Add {path.name} — training complete"],
+        cwd=str(ROOT), check=False,
+    )
 
 
 def _load_coarse_cfg():
