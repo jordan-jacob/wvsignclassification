@@ -85,14 +85,14 @@ def extract_frames(video_path, out_dir, video_id, max_seconds=None, target_fps=1
     return count
 
 
-def process_video(row, smoke, fps=1.0):
+def process_video(row, smoke, fps=1.0, frames_root=FRAMES_ROOT):
     video_id = row["video_id"]
     county = row["primary_county"]
     road_type = row["sign_system_label"]
     url = row["video_link"]
     filename = row["filename"]
 
-    out_dir = FRAMES_ROOT / video_id
+    out_dir = frames_root / video_id
 
     # Skip if frames already exist for this video_id
     existing = list(out_dir.glob(f"{video_id}_*.jpg")) if out_dir.exists() else []
@@ -143,14 +143,14 @@ def process_video(row, smoke, fps=1.0):
         raise SystemExit(1)
 
 
-def preannotate(conf):
+def preannotate(conf, frames_root=FRAMES_ROOT):
     from ultralytics import YOLO
 
     model = YOLO(CHECKPOINT)
 
-    frames = sorted(FRAMES_ROOT.glob("**/*.jpg"))
+    frames = sorted(frames_root.glob("**/*.jpg"))
     if not frames:
-        print(f"No frames found in {FRAMES_ROOT}")
+        print(f"No frames found in {frames_root}")
         return
 
     PREANNO_DIR.mkdir(parents=True, exist_ok=True)
@@ -249,17 +249,21 @@ def main():
                     help="frames to extract per second of video (default 1)")
     ap.add_argument("--csv", default=None,
                     help="path to download list CSV (default: configs/wv_download_list.csv)")
+    ap.add_argument("--output-dir", default=None,
+                    help="directory to write extracted frames (default: data/raw/wvdoh_frames)")
     args = ap.parse_args()
+
+    frames_root = Path(args.output_dir) if args.output_dir else FRAMES_ROOT
 
     if not args.preannotate_only:
         rows = load_rows(csv_path=args.csv, video_id_filter=args.video_id)
         if args.smoke:
             rows = rows[:3]
         for row in rows:
-            process_video(row, smoke=args.smoke, fps=args.fps)
+            process_video(row, smoke=args.smoke, fps=args.fps, frames_root=frames_root)
 
     if not args.video_only:
-        preannotate(conf=args.conf)
+        preannotate(conf=args.conf, frames_root=frames_root)
 
 
 if __name__ == "__main__":
