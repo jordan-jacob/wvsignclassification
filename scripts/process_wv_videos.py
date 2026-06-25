@@ -12,7 +12,6 @@ import argparse
 import csv
 import json
 import shutil
-import subprocess
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -35,12 +34,24 @@ def disk_free_gb():
 
 
 def download_video(url, dest):
+    import requests
+    from tqdm import tqdm
+
     dest.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["wget", "--continue", "--show-progress", "-O", str(dest), url],
-        check=True,
-    )
-    return dest.stat().st_size / 1e6
+    r = requests.get(url, stream=True, timeout=30)
+    r.raise_for_status()
+    total = int(r.headers.get('content-length', 0))
+
+    with open(dest, 'wb') as f, tqdm(
+        total=total, unit='B', unit_scale=True,
+        desc=dest.name, ncols=70
+    ) as bar:
+        for chunk in r.iter_content(chunk_size=1024*1024):
+            if chunk:
+                f.write(chunk)
+                bar.update(len(chunk))
+
+    return dest.stat().st_size / 1024**2  # MB
 
 
 def extract_frames(video_path, out_dir, video_id, max_seconds=None, target_fps=1.0):
