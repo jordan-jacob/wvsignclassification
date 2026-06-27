@@ -112,7 +112,7 @@ def _write_yaml(data_dir: Path, nc: int, names: list, suffix: str) -> Path:
     data = {
         "path": str(data_dir.resolve()),
         "train": "train/images",
-        "val": "train/images",  # no official LISA val split
+        "val": "val/images",
         "nc": nc,
         "names": names,
     }
