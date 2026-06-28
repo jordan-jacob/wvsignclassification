@@ -6,8 +6,6 @@ Trains two models in sequence:
   a) Full 47-class model   → checkpoints/phase2_full_best.pt
   b) 4-class coarse model  → checkpoints/phase2_4class_best.pt
 
-LISA has no official val split; training images are reused for validation.
-
 Flags
 -----
 --production : 300 epochs, patience=50, batch=16, imgsz=640
@@ -16,6 +14,7 @@ Flags
 import argparse
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -157,6 +156,15 @@ def _add_early_stop_callback(model, total_epochs: int, ckpt_name: str) -> None:
     model.add_callback("on_train_end", on_train_end)
 
 
+def _preflight(yaml_path: Path) -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "preflight_check.py"), str(yaml_path)],
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"Preflight check failed for {yaml_path}; aborting.")
+
+
 def _train(variant: str, data_yaml: Path, init_weights: Path,
            batch: int, epochs: int = 30, imgsz: int = 640,
            patience: int | None = None) -> Path:
@@ -247,6 +255,7 @@ def main():
             # --- variant a: full 47-class ---
             print("\n=== Phase 2a: full 47-class LISA ===")
             full_yaml = _write_yaml(lisa_dir, len(lisa_names), lisa_names, "full")
+            _preflight(full_yaml)
             _train("full", full_yaml, phase1_ckpt, batch, epochs=epochs,
                    imgsz=imgsz, patience=patience)
         else:
@@ -256,6 +265,7 @@ def main():
         print("\n=== Phase 2b: 4-class LISA ===")
         lisa_4class_dir = ensure_lisa_4class()
         four_yaml = _write_yaml(lisa_4class_dir, len(COARSE_NAMES), COARSE_NAMES, "4class")
+        _preflight(four_yaml)
         _train("4class", four_yaml, phase1_ckpt, batch, epochs=epochs,
                imgsz=imgsz, patience=patience)
 
