@@ -74,26 +74,23 @@ def _junction(link: Path, target: Path) -> None:
 def ensure_lisa_4class() -> Path:
     lisa = PROCESSED / "lisa"
     out_dir = PROCESSED / "lisa_4class"
-
     lisa_names = yaml.safe_load((CONFIGS / "lisa.yaml").read_text())["names"]
     # fine index → coarse index (or None)
     idx_map = {i: LISA_4CLASS[name] for i, name in enumerate(lisa_names)}
 
-    src_lbl = lisa / "train" / "labels"
-    dst_lbl = out_dir / "train" / "labels"
-    dst_img = out_dir / "train" / "images"
-
-    _junction(dst_img, lisa / "train" / "images")
-    dst_lbl.mkdir(parents=True, exist_ok=True)
-
-    src_files = list(src_lbl.glob("*.txt"))
-    existing = {p.name for p in dst_lbl.glob("*.txt")}
-    todo = [f for f in src_files if f.name not in existing]
-
-    if not todo:
-        print(f"  4-class labels already present ({len(src_files)} files)")
-    else:
-        print(f"  Remapping {len(todo)} LISA label files to 4 classes ...")
+    for split in ("train", "val"):
+        src_lbl = lisa / split / "labels"
+        dst_lbl = out_dir / split / "labels"
+        dst_img = out_dir / split / "images"
+        _junction(dst_img, lisa / split / "images")
+        dst_lbl.mkdir(parents=True, exist_ok=True)
+        src_files = list(src_lbl.glob("*.txt"))
+        existing = {p.name for p in dst_lbl.glob("*.txt")}
+        todo = [f for f in src_files if f.name not in existing]
+        if not todo:
+            print(f"  4-class {split} labels already present ({len(src_files)} files)")
+            continue
+        print(f"  Remapping {len(todo)} LISA {split} label files to 4 classes ...")
         for src_file in todo:
             lines = []
             for line in src_file.read_text().splitlines():
@@ -112,7 +109,7 @@ def _write_yaml(data_dir: Path, nc: int, names: list, suffix: str) -> Path:
     data = {
         "path": str(data_dir.resolve()),
         "train": "train/images",
-        "val": "train/images",  # no official LISA val split
+        "val": "val/images",
         "nc": nc,
         "names": names,
     }
