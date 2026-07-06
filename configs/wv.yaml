@@ -1,16 +1,14 @@
 names:
-- chevron
-- curve
-- deerCrossing
-- guide
-- other
-- pedestrianCrossing
-- railroadCrossing
-- speedLimit
-- stop
-- warning
-- yield
-nc: 11
-path: C:\Users\jrj00048\Projects\wvsignclassification\data\processed\wv
+- Curves
+- HighwaySymbols
+- Informational
+- MileMarkers
+- Regulatory
+- SpeedLimits
+- StopSigns
+- TrafficLights
+- Warnings
+nc: 9
+path: /opt/dlami/nvme/Jacob/wvsignclassification/data/processed/wv
 train: train/images
 val: val/images

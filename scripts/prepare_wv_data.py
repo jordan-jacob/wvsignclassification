@@ -40,38 +40,40 @@ SEED = 42
 #   11:railroadCrossing 12:ruralCrossing_other 13:schoolZone 14:speedLimit
 #   15:stop 16:warning 17:yield
 CLASS_REMAP: dict[int, int | None] = {
-    0: 0,    # chevron
-    1: 1,    # curve
-    2: 4,    # damaged        → other
-    3: 2,    # deerCrossing
-    4: 3,    # guide
-    5: 4,    # intersection   → other
-    6: 4,    # laneEnds       → other
-    7: None, # missing_expected  DROPPED
-    8: None, # occluded          DROPPED
-    9: 4,    # other
-    10: 5,   # pedestrianCrossing
-    11: 6,   # railroadCrossing
-    12: 4,   # ruralCrossing_other → other
-    13: 4,   # schoolZone     → other
-    14: 7,   # speedLimit
-    15: 8,   # stop
-    16: 9,   # warning
-    17: 10,  # yield
+    0:  4,    # chevron              → Regulatory (not Curves per WVDOH)
+    1:  0,    # curve                → Curves
+    2:  None, # damaged              DROPPED
+    3:  8,    # deerCrossing         → Warnings
+    4:  2,    # guide                → Informational
+    5:  1,    # highwaySymbol        → HighwaySymbols
+    6:  2,    # informational        → Informational
+    7:  8,    # intersection         → Warnings
+    8:  8,    # laneEnds             → Warnings
+    9:  3,    # mileMarker           → MileMarkers
+    10: None, # missing_expected     DROPPED
+    11: None, # occluded             DROPPED
+    12: 4,    # other                → Regulatory (mostly regulatory content)
+    13: 8,    # pedestrianCrossing   → Warnings
+    14: 8,    # railroadCrossing     → Warnings
+    15: 8,    # ruralCrossing_other  → Warnings
+    16: 4,    # schoolZone           → Regulatory
+    17: 5,    # speedLimit           → SpeedLimits
+    18: 6,    # stop                 → StopSigns
+    19: 7,    # trafficLight         → TrafficLights
+    20: 8,    # warning              → Warnings
+    21: 4,    # yield                → Regulatory
 }
 
 NEW_CLASSES = [
-    "chevron",            # 0
-    "curve",              # 1
-    "deerCrossing",       # 2
-    "guide",              # 3
-    "other",              # 4  (damaged, laneEnds, intersection, schoolZone, ruralCrossing_other merged here)
-    "pedestrianCrossing", # 5
-    "railroadCrossing",   # 6
-    "speedLimit",         # 7
-    "stop",               # 8
-    "warning",            # 9
-    "yield",              # 10
+    "Curves",          # 0
+    "HighwaySymbols",  # 1
+    "Informational",   # 2
+    "MileMarkers",     # 3
+    "Regulatory",      # 4
+    "SpeedLimits",     # 5
+    "StopSigns",       # 6
+    "TrafficLights",   # 7
+    "Warnings",        # 8
 ]
 
 
