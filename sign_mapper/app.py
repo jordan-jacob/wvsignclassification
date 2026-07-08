@@ -1,21 +1,32 @@
 """
 WV Sign Mapper — Flask web application.
-Run: python app.py  then open http://localhost:5000
+Run: python app.py  (browser opens automatically)
 """
 import json
 import shutil
 import sys
 import threading
+import webbrowser
 from pathlib import Path
 from queue import Empty, Queue
 
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 
-BASE_DIR = Path(__file__).parent
+# When frozen by PyInstaller the executable and its data land in different places:
+#   sys.executable      → .../dist/WVSignMapper/WVSignMapper.exe  (writable, for outputs)
+#   sys._MEIPASS        → same dist folder in --onedir mode        (read-only bundle data)
+# In normal Python both resolve to the sign_mapper/ source directory.
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys.executable).parent
+    _STATIC_DIR = Path(sys._MEIPASS) / 'static'
+else:
+    BASE_DIR = Path(__file__).parent
+    _STATIC_DIR = BASE_DIR / 'static'
+
 OUTPUTS_DIR = BASE_DIR / 'outputs'
 OUTPUTS_DIR.mkdir(exist_ok=True)
 
-app = Flask(__name__, static_folder='static', static_url_path='/static')
+app = Flask(__name__, static_folder=str(_STATIC_DIR), static_url_path='/static')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
 
 # ---------------------------------------------------------------------------
@@ -248,5 +259,11 @@ def export_geojson():
 
 
 if __name__ == '__main__':
-    print("WV Sign Mapper starting at http://localhost:5000")
-    app.run(host='0.0.0.0', port=5000, threaded=True, debug=False)
+    port = 5000
+    url = f'http://localhost:{port}'
+    # Open the browser after the server has had a moment to bind its socket
+    threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+    print(f'\n  WV Sign Mapper')
+    print(f'  Running at {url}')
+    print(f'  Close this window to stop the server.\n')
+    app.run(host='0.0.0.0', port=port, threaded=True, debug=False)
