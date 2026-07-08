@@ -20,7 +20,7 @@ if getattr(sys, 'frozen', False):
     BASE_DIR = Path(sys.executable).parent
     _STATIC_DIR = Path(sys._MEIPASS) / 'static'
 else:
-    BASE_DIR = Path(__file__).parent
+    BASE_DIR = Path(__file__).resolve().parent   # resolve() guarantees absolute even when __file__ is relative
     _STATIC_DIR = BASE_DIR / 'static'
 
 OUTPUTS_DIR = BASE_DIR / 'outputs'
@@ -259,9 +259,20 @@ def export_geojson():
 
 
 if __name__ == '__main__':
+    import socket
     port = 5000
     url = f'http://localhost:{port}'
-    # Open the browser after the server has had a moment to bind its socket
+
+    # Detect port conflict before Flask tries to bind, so the error is readable
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
+        _s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            _s.bind(('0.0.0.0', port))
+        except OSError:
+            print(f'\n  ERROR: port {port} is already in use.')
+            print(f'  Close the other WV Sign Mapper window and try again.\n')
+            raise SystemExit(1)
+
     threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     print(f'\n  WV Sign Mapper')
     print(f'  Running at {url}')
