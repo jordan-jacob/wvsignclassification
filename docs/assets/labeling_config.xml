@@ -1,0 +1,61 @@
+<!--
+  Label Studio annotation config for WV roadway sign detection.
+  22 fine-grained annotation classes → 11-class WVDOH training taxonomy.
+
+  Mapping summary:
+    stop, yield                          → stop / yield
+    speedLimit_25/35/45/55/65            → speedLimit
+    warning_generic                      → warning
+    curve_left, curve_right              → curve
+    chevron_left, chevron_right          → chevron
+    deerCrossing, pedestrianCrossing     → deerCrossing / pedestrianCrossing
+    railroadCrossing                     → railroadCrossing
+    guide_route, guide_mileMarker        → guide
+    schoolZone, intersection, laneEnds,
+    damaged, ruralCrossing               → other
+
+  Export format: YOLO (bounding box). Image size is included in YOLO header.
+-->
+<View>
+  <Image name="image" value="$image" zoom="true" zoomControl="true"/>
+
+  <RectangleLabels name="label" toName="image" showInline="true">
+
+    <!-- Regulatory -->
+    <Label value="stop"            background="#e53e3e" />
+    <Label value="yield"           background="#dd6b20" />
+
+    <!-- Speed limits -->
+    <Label value="speedLimit_25"   background="#3182ce" />
+    <Label value="speedLimit_35"   background="#2b6cb0" />
+    <Label value="speedLimit_45"   background="#2c5282" />
+    <Label value="speedLimit_55"   background="#2a4365" />
+    <Label value="speedLimit_65"   background="#1a365d" />
+
+    <!-- Warning signs -->
+    <Label value="warning_generic" background="#d69e2e" />
+
+    <!-- Curves and delineators -->
+    <Label value="curve_left"      background="#38a169" />
+    <Label value="curve_right"     background="#2f855a" />
+    <Label value="chevron_left"    background="#276749" />
+    <Label value="chevron_right"   background="#22543d" />
+
+    <!-- Crossing warnings -->
+    <Label value="deerCrossing"         background="#805ad5" />
+    <Label value="pedestrianCrossing"   background="#6b46c1" />
+    <Label value="railroadCrossing"     background="#553c9a" />
+
+    <!-- Guide signs -->
+    <Label value="guide_route"          background="#00b5d8" />
+    <Label value="guide_mileMarker"     background="#0987a0" />
+
+    <!-- Merged → other in training -->
+    <Label value="schoolZone"      background="#f6ad55" />
+    <Label value="intersection"    background="#ed8936" />
+    <Label value="laneEnds"        background="#dd6b20" />
+    <Label value="damaged"         background="#718096" />
+    <Label value="ruralCrossing"   background="#4a5568" />
+
+  </RectangleLabels>
+</View>

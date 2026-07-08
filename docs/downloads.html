@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WV Sign Detection — Downloads</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html">WV Sign Detection</a>
+  <div class="nav-links">
+    <a href="index.html">Map</a>
+    <a href="downloads.html" class="active">Downloads</a>
+    <a href="qa.html">QA Review</a>
+    <a href="http://localhost:5000" class="local-link" target="_blank" rel="noopener">Local App ↗</a>
+  </div>
+</nav>
+
+<main class="content-page">
+
+  <h1>Downloads &amp; Resources</h1>
+  <p class="page-lead">
+    Model checkpoints, annotation datasets, and instructions for running the Sign Mapper
+    pipeline locally on WVDOH dashcam footage.
+  </p>
+
+  <!-- ── Model Checkpoints ── -->
+  <div class="section-block">
+    <h2>Model Checkpoints</h2>
+    <p>
+      Checkpoints are stored in GitHub LFS. Downloads may be slow (50–100 MB each);
+      progress is shown in your browser's download manager.
+    </p>
+
+    <div class="card-grid">
+
+      <!-- Phase 2 -->
+      <div class="download-card">
+        <h3>Phase 2 — LISA Fine-tune</h3>
+        <p class="card-desc">
+          YOLOv8m backbone pre-trained on MTSD, fine-tuned on the LISA traffic sign
+          dataset (47 MUTCD classes, North America subset). General-purpose sign
+          detector suitable for any US roadway.
+        </p>
+        <dl class="card-meta">
+          <dt>File</dt>      <dd><code>phase2_full_best.pt</code></dd>
+          <dt>Architecture</dt><dd>YOLOv8m</dd>
+          <dt>Classes</dt>   <dd>47 (MUTCD / LISA)</dd>
+          <dt>mAP50</dt>     <dd>0.731 (LISA val)</dd>
+          <dt>Size</dt>      <dd>~52 MB</dd>
+        </dl>
+        <div class="card-actions">
+          <a class="btn btn-primary"
+             href="https://github.com/jordan-jacob/wvsignclassification/raw/main/checkpoints/phase2_full_best.pt">
+            Download
+          </a>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="download-card">
+        <h3>Phase 3 — WVDOH Fine-tune <span class="todo-note">TODO: update mAP</span></h3>
+        <p class="card-desc">
+          Phase 2 checkpoint further fine-tuned on annotated WVDOH dashcam frames.
+          Optimized for the 11-class WV roadway taxonomy. Use this checkpoint with
+          the Sign Mapper local app.
+        </p>
+        <dl class="card-meta">
+          <dt>File</dt>      <dd><code>phase3_wv_augmented_best.pt</code></dd>
+          <dt>Architecture</dt><dd>YOLOv8m</dd>
+          <dt>Classes</dt>   <dd>11 (WVDOH taxonomy)</dd>
+          <dt>mAP50</dt>     <dd><!-- TODO: fill in after eval -->TBD</dd>
+          <dt>Size</dt>      <dd>~52 MB</dd>
+        </dl>
+        <div class="card-actions">
+          <a class="btn btn-primary"
+             href="https://github.com/jordan-jacob/wvsignclassification/raw/main/checkpoints/phase3_wv_augmented_best.pt">
+            Download
+          </a>
+        </div>
+      </div>
+
+    </div>
+
+    <p style="margin-top:16px;font-size:12px;color:#718096">
+      Phase 1 (MTSD pre-training only) and Phase 3 baseline checkpoints are also
+      available in the
+      <a href="https://github.com/jordan-jacob/wvsignclassification/tree/main/checkpoints"
+         style="color:#3182ce">checkpoints/</a> directory.
+    </p>
+  </div>
+
+  <!-- ── Annotation Dataset ── -->
+  <div class="section-block">
+    <h2>Annotation Dataset <span class="todo-note">TODO: add Kaggle URL</span></h2>
+    <div class="download-card" style="max-width:640px">
+      <h3>WVDOH Sign Annotations — Label Studio Export</h3>
+      <p class="card-desc">
+        Bounding-box annotations of WVDOH dashcam frames in YOLO format.
+        22 fine-grained annotation classes remapped to the 11-class WVDOH
+        training taxonomy at data prep time.
+      </p>
+      <dl class="card-meta">
+        <dt>Export format</dt> <dd>YOLO (bounding box, normalized)</dd>
+        <dt>Annotation tool</dt><dd>Label Studio</dd>
+        <dt>Annotation classes</dt><dd>22 (see taxonomy below)</dd>
+        <dt>Training classes</dt><dd>11 (WVDOH taxonomy)</dd>
+        <dt>Dataset</dt>       <dd><!-- TODO: Kaggle URL -->Kaggle (link pending)</dd>
+      </dl>
+      <p class="card-desc" style="margin-top:8px">
+        See
+        <a href="https://github.com/jordan-jacob/wvsignclassification/blob/main/docs/assets/labeling_config.xml"
+           style="color:#3182ce">labeling_config.xml</a>
+        for the complete Label Studio config and class color scheme.
+        Class-to-taxonomy mapping is documented in
+        <a href="https://github.com/jordan-jacob/wvsignclassification/blob/main/CLAUDE.md"
+           style="color:#3182ce">CLAUDE.md</a>.
+      </p>
+      <div class="card-actions" style="margin-top:8px">
+        <a class="btn btn-secondary" style="opacity:0.5;cursor:not-allowed"
+           title="Kaggle dataset URL pending publication">
+          Kaggle Dataset (coming soon)
+        </a>
+      </div>
+    </div>
+
+    <div style="margin-top:20px">
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Contributing annotations</h3>
+      <p style="margin-bottom:10px">
+        To contribute new annotated frames from WV roadway footage:
+      </p>
+      <ol class="install-steps">
+        <li>Download <a href="https://labelstud.io" style="color:#3182ce">Label Studio</a> (free, open-source)</li>
+        <li>Import the
+          <a href="assets/labeling_config.xml" style="color:#3182ce">labeling config XML</a>
+          when creating a new project (use "Custom template")</li>
+        <li>Import your dashcam frames and annotate using rectangular bounding boxes</li>
+        <li>Export as <strong>YOLO format</strong> (File → Export → YOLO)</li>
+        <li>Submit via the repo's
+          <a href="https://github.com/jordan-jacob/wvsignclassification/issues"
+             style="color:#3182ce">Issues page</a>
+          or open a pull request adding your export to <code>data/wv_exports_all/</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ── Local Inference App ── -->
+  <div class="section-block">
+    <h2>Local Inference App</h2>
+    <p>
+      The Sign Mapper processes dashcam video locally — inference and GPS interpolation
+      require Python and a CPU (GPU optional). No data leaves your machine.
+    </p>
+
+    <div class="download-card" style="max-width:640px">
+      <h3>sign_mapper — Flask web app</h3>
+      <p class="card-desc">
+        Upload a dashcam video, a GPS sidecar file (<code>.srt</code> or <code>.csv</code>),
+        and a YOLO checkpoint. The app extracts frames at 2 fps, runs inference,
+        clusters detections spatially, and exports a GeoJSON file for ArcGIS or
+        for viewing on the map tab above.
+      </p>
+      <div class="card-actions">
+        <pre>git clone https://github.com/jordan-jacob/wvsignclassification
+cd wvsignclassification/sign_mapper
+pip install -r requirements.txt
+python app.py
+# open http://localhost:5000</pre>
+      </div>
+      <p class="card-desc" style="margin-top:12px">
+        <strong>GPS sidecar requirement:</strong> most action cameras (DJI, GoPro, Rexing)
+        embed GPS as subtitle tracks in <code>.srt</code> format alongside the video.
+        Check your camera's export settings. A <code>.csv</code> with <code>timestamp,lat,lon</code>
+        columns is also accepted.
+      </p>
+    </div>
+  </div>
+
+  <!-- ── Citation / Contact ── -->
+  <div class="section-block">
+    <h2>Citation &amp; Contact <span class="todo-note">TODO: add paper citation</span></h2>
+
+    <div class="card-grid">
+      <div class="download-card">
+        <h3>Citation</h3>
+        <p class="card-desc">
+          If you use this work in your research, please cite:
+        </p>
+        <!-- TODO: replace with actual citation when paper is published -->
+        <pre style="margin-top:8px">@article{wvsigndetection2026,
+  title   = {Automated Roadway Sign Detection and
+             Inventory Reconciliation for West Virginia},
+  author  = {TBD},
+  journal = {TBD},
+  year    = {2026}
+}</pre>
+        <p class="card-desc" style="margin-top:8px;font-size:12px">
+          Paper citation will be updated upon publication.
+        </p>
+      </div>
+
+      <div class="download-card">
+        <h3>Contact</h3>
+        <p class="card-desc">
+          This project is a collaboration between West Virginia University and
+          the WV Division of Highways (WVDOH).
+        </p>
+        <dl class="card-meta" style="margin-top:8px">
+          <dt>Research lab</dt><dd>WVU Lane Department of Computer Science &amp; Electrical Engineering</dd>
+          <dt>Sponsor</dt>    <dd>WV Division of Highways (WVDOH)</dd>
+          <dt>GitHub</dt>    <dd><a href="https://github.com/jordan-jacob/wvsignclassification"
+                                    style="color:#3182ce">jordan-jacob/wvsignclassification</a></dd>
+          <dt>Issues</dt>    <dd><a href="https://github.com/jordan-jacob/wvsignclassification/issues"
+                                    style="color:#3182ce">GitHub Issues</a></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+</main>
+</body>
+</html>
