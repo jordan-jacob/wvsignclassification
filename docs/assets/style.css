@@ -291,12 +291,54 @@ pre {
 #stats-panel .stat-row:last-child { border-bottom: none; }
 #stats-panel strong { color: var(--text-dark); }
 
+/* Per-class results table (sidebar) */
+#results-panel table.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+  color: var(--text-mid);
+}
+#results-panel .results-table th {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text-light);
+  padding: 2px 3px;
+  border-bottom: 1px solid var(--border);
+}
+#results-panel .results-table th:first-child { text-align: left; }
+#results-panel .results-table td {
+  text-align: right;
+  padding: 2px 3px;
+  border-bottom: 1px solid var(--bg);
+}
+#results-panel .results-table td:first-child { text-align: left; color: var(--text-mid); }
+#results-panel .results-table tr.overall-row td {
+  font-weight: 700;
+  color: var(--text-dark);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+#results-panel .results-table td.best { color: #2f855a; font-weight: 700; }
+
 #map-container {
   flex: 1;
   position: relative;
   min-width: 0;
 }
 #map { position: absolute; inset: 0; }
+
+/* Map info box (Leaflet control) */
+.map-info-box {
+  background: rgba(255, 255, 255, 0.94);
+  padding: 8px 11px;
+  border-radius: 6px;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.28);
+  font-size: 12px;
+  color: var(--text-mid);
+  max-width: 260px;
+  line-height: 1.35;
+}
+.map-info-box strong { color: var(--text-dark); }
 
 /* ── QA page ── */
 #qa-page {

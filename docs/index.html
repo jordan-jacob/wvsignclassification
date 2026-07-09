@@ -35,8 +35,33 @@
 
       <div>
         <h2>Sign Detections</h2>
-        <p style="font-size:12px;color:#718096;margin-top:4px">
-          US-19 corridor, Summersville WV — demo dataset
+        <p id="route-subtitle" style="font-size:12px;color:#718096;margin-top:4px">
+          Loading real WVDOH dashcam run…
+        </p>
+      </div>
+
+      <!-- Model performance (Phase 3, WV val) -->
+      <div id="results-panel">
+        <div class="sidebar-label">Model performance — Phase 3 (WV val)</div>
+        <table class="results-table">
+          <thead>
+            <tr><th>Class</th><th>P</th><th>R</th><th>mAP50</th><th>50-95</th></tr>
+          </thead>
+          <tbody>
+            <tr class="overall-row"><td>Overall</td><td>0.814</td><td>0.796</td><td>0.818</td><td>0.598</td></tr>
+            <tr><td>Curves</td><td>0.751</td><td>0.722</td><td>0.787</td><td>0.577</td></tr>
+            <tr><td>HighwaySymbols</td><td>0.886</td><td>0.749</td><td>0.835</td><td>0.600</td></tr>
+            <tr><td>Informational</td><td>0.733</td><td>0.766</td><td>0.784</td><td>0.538</td></tr>
+            <tr><td>MileMarkers</td><td>0.919</td><td>0.867</td><td>0.858</td><td>0.547</td></tr>
+            <tr><td>Regulatory</td><td>0.714</td><td>0.606</td><td>0.637</td><td>0.384</td></tr>
+            <tr><td>SpeedLimits</td><td>0.856</td><td>0.877</td><td>0.895</td><td>0.796</td></tr>
+            <tr><td>StopSigns</td><td>0.963</td><td>0.984</td><td class="best">0.992</td><td>0.896</td></tr>
+            <tr><td>TrafficLights</td><td>0.723</td><td>0.849</td><td>0.815</td><td>0.496</td></tr>
+            <tr><td>Warnings</td><td>0.779</td><td>0.740</td><td>0.763</td><td>0.546</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:10px;color:#a0aec0;margin-top:4px">
+          YOLOv8m · 8,156 train / 1,924 val frames · 9 WVDOH GIS categories
         </p>
       </div>
 
@@ -108,6 +133,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="data/demo_detections.js"></script>
 <script src="assets/map.js"></script>
 </body>
 </html>

@@ -329,5 +329,9 @@ document.getElementById('load-demo-btn').addEventListener('click', () => {
   fetch('data/demo_discrepancies.json')
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(data => loadReport(data))
-    .catch(err => alert('Could not load demo data: ' + err.message));
+    .catch(err => {
+      // fetch() is blocked under file:// — fall back to the embedded copy.
+      if (window.__DEMO_DISCREPANCIES__) { loadReport(window.__DEMO_DISCREPANCIES__); return; }
+      alert('Could not load demo data: ' + err.message);
+    });
 });

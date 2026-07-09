@@ -2,6 +2,10 @@
 
 const DEMO_GEOJSON = 'data/demo_detections.geojson';
 
+// Human-readable label for the demo route (real WVDOH dashcam run).
+// Updated by Task 2 to match the selected inference video.
+const ROUTE_LABEL = 'Wetzel County, WV — US Route (Apr 2026)';
+
 // ── Color helpers ──────────────────────────────────────────────────────────
 function markerColor(props) {
   if (props.discrepancy_type === 'in_inventory_not_detected') return '#718096';
@@ -43,6 +47,20 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let layerGroup = L.layerGroup().addTo(map);
 
+// ── Info box (bottom-left) ─────────────────────────────────────────────────
+const infoControl = L.control({ position: 'bottomleft' });
+infoControl.onAdd = function () {
+  this._div = L.DomUtil.create('div', 'map-info-box');
+  this._div.innerHTML = 'Loading detections…';
+  return this._div;
+};
+infoControl.update = function (count) {
+  this._div.innerHTML =
+    `<strong>${count} sign detections</strong> from ${ROUTE_LABEL}.<br>` +
+    `Powered by YOLOv8m trained on WVDOH dashcam footage.`;
+};
+infoControl.addTo(map);
+
 // ── Render GeoJSON features ────────────────────────────────────────────────
 function renderFeatures(fc) {
   layerGroup.clearLayers();
@@ -67,6 +85,9 @@ function renderFeatures(fc) {
   });
 
   if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+  infoControl.update(features.length);
+  const subtitle = document.getElementById('route-subtitle');
+  if (subtitle) subtitle.textContent = `${ROUTE_LABEL} · ${features.length} detections`;
   updateStats(features);
 }
 
@@ -102,6 +123,14 @@ fetch(DEMO_GEOJSON)
     document.getElementById('load-status').style.color = '#38a169';
   })
   .catch(err => {
+    // fetch() is blocked under file:// — fall back to the embedded copy.
+    if (window.__DEMO_GEOJSON__) {
+      renderFeatures(window.__DEMO_GEOJSON__);
+      document.getElementById('load-status').textContent =
+        `Loaded ${(window.__DEMO_GEOJSON__.features || []).length} detections from demo dataset`;
+      document.getElementById('load-status').style.color = '#38a169';
+      return;
+    }
     document.getElementById('load-status').textContent = 'Demo data unavailable — upload a GeoJSON file';
     document.getElementById('load-status').style.color = '#718096';
   });

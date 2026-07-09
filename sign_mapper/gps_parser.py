@@ -121,13 +121,104 @@ def parse_csv(path: Path) -> list:
     return fixes
 
 
+# ExifTool-derived CSV (WVDOH dashcam extraction). Columns of interest:
+#   sample_time (video-relative seconds), gps_latitude, gps_longitude,
+#   gps_altitude, gps_timestamp. Lat/lon are signed decimal floats, but
+#   ExifTool can also emit "39.28 N" / "80.96 W" and unit-suffixed altitude
+#   ("273.3 m Above Sea Level") — both are handled defensively below.
+_EXIF_LAT = {'gps_latitude', 'gpslatitude'}
+_EXIF_LON = {'gps_longitude', 'gpslongitude'}
+_EXIF_ALT = {'gps_altitude', 'gpsaltitude'}
+_EXIF_STIME = {'sample_time'}
+_EXIF_DTIME = {'gps_timestamp', 'gpsdatetime'}
+
+
+def _is_exiftool(headers) -> bool:
+    low = {h.strip().lower() for h in headers}
+    return bool(low & _EXIF_LAT) and bool(low & _EXIF_LON)
+
+
+def _parse_coord(val: str) -> float:
+    """Parse '39.28', '-80.96', or '39.28 N' / '80.96 W' to a signed float."""
+    val = val.strip()
+    if val and val[-1] in 'NSEWnsew':
+        # Directional suffix: magnitude is positive, direction sets the sign.
+        direction = val[-1].upper()
+        return (-1.0 if direction in ('S', 'W') else 1.0) * abs(float(val[:-1].strip()))
+    # Already a signed decimal — keep it as-is.
+    return float(val)
+
+
+def _strip_units(val: str):
+    """Pull the leading number out of '273.3 m Above Sea Level' etc."""
+    m = re.match(r'\s*(-?\d+\.?\d*)', val)
+    return float(m.group(1)) if m else None
+
+
+def parse_exiftool(path: Path) -> list:
+    fixes = []
+    with open(path, newline='', encoding='utf-8', errors='replace') as f:
+        reader = csv.DictReader(f)
+        headers = list(reader.fieldnames or [])
+        lat_col = _col(headers, _EXIF_LAT)
+        lon_col = _col(headers, _EXIF_LON)
+        alt_col = _col(headers, _EXIF_ALT)
+        stime_col = _col(headers, _EXIF_STIME)
+        dtime_col = _col(headers, _EXIF_DTIME)
+        if not (lat_col and lon_col):
+            raise ValueError(f"ExifTool CSV missing lat/lon columns. Found: {headers}")
+
+        dt_rows = []  # (datetime_str, lat, lon, alt) when using absolute time
+        for row in reader:
+            try:
+                lat = _parse_coord(row[lat_col])
+                lon = _parse_coord(row[lon_col])
+            except (ValueError, KeyError, AttributeError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180) or (lat == 0 and lon == 0):
+                continue
+            alt = None
+            if alt_col and row.get(alt_col, '').strip():
+                alt = _strip_units(row[alt_col])
+
+            if stime_col and row.get(stime_col, '').strip():
+                # sample_time is already video-relative seconds
+                try:
+                    ts_ms = float(row[stime_col]) * 1000.0
+                except ValueError:
+                    continue
+                fixes.append({'ts_ms': ts_ms, 'lat': lat, 'lon': lon, 'alt': alt})
+            elif dtime_col and row.get(dtime_col, '').strip():
+                dt_rows.append((row[dtime_col], lat, lon, alt))
+
+    # Fallback: derive relative timestamps from absolute gps_timestamp.
+    # ExifTool date form "2024:03:15 14:23:01" -> ISO before parsing.
+    if not fixes and dt_rows:
+        base = None
+        for dts, lat, lon, alt in dt_rows:
+            dts = dts.strip().rstrip('Z')
+            if re.match(r'\d{4}:\d{2}:\d{2}', dts):
+                dts = dts.replace(':', '-', 2)
+            try:
+                ms = _parse_ts_ms(dts)
+            except ValueError:
+                continue
+            if base is None:
+                base = ms
+            fixes.append({'ts_ms': ms - base, 'lat': lat, 'lon': lon, 'alt': alt})
+
+    return sorted(fixes, key=lambda x: x['ts_ms'])
+
+
 def parse_sidecar(path) -> list:
     path = Path(path)
     ext = path.suffix.lower()
     if ext == '.srt':
         fixes = parse_srt(path)
     elif ext == '.csv':
-        fixes = parse_csv(path)
+        with open(path, newline='', encoding='utf-8', errors='replace') as f:
+            headers = next(csv.reader(f), [])
+        fixes = parse_exiftool(path) if _is_exiftool(headers) else parse_csv(path)
     else:
         raise ValueError(f"Unsupported GPS format {ext!r}. Expected .srt or .csv")
     if not fixes:

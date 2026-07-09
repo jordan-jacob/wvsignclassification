@@ -61,17 +61,19 @@
 
       <!-- Phase 3 -->
       <div class="download-card">
-        <h3>Phase 3 — WVDOH Fine-tune <span class="todo-note">TODO: update mAP</span></h3>
+        <h3>Phase 3 — WVDOH Fine-tune</h3>
         <p class="card-desc">
-          Phase 2 checkpoint further fine-tuned on annotated WVDOH dashcam frames.
-          Optimized for the 11-class WV roadway taxonomy. Use this checkpoint with
-          the Sign Mapper local app.
+          Phase 2 checkpoint further fine-tuned on annotated WVDOH dashcam frames
+          (augmented color-jitter variant). Optimized for the 9 WVDOH GIS sign
+          categories. mAP50=0.818 overall, 0.992 on StopSigns. Use this checkpoint
+          with the Sign Mapper local app.
         </p>
         <dl class="card-meta">
           <dt>File</dt>      <dd><code>phase3_wv_augmented_best.pt</code></dd>
           <dt>Architecture</dt><dd>YOLOv8m</dd>
-          <dt>Classes</dt>   <dd>11 (WVDOH taxonomy)</dd>
-          <dt>mAP50</dt>     <dd><!-- TODO: fill in after eval -->TBD</dd>
+          <dt>Classes</dt>   <dd>9 (WVDOH GIS categories)</dd>
+          <dt>mAP50</dt>     <dd>0.818 (WV val)</dd>
+          <dt>mAP50-95</dt>  <dd>0.598 (WV val)</dd>
           <dt>Size</dt>      <dd>~52 MB</dd>
         </dl>
         <div class="card-actions">
@@ -94,7 +96,7 @@
 
   <!-- ── Annotation Dataset ── -->
   <div class="section-block">
-    <h2>Annotation Dataset <span class="todo-note">TODO: add Kaggle URL</span></h2>
+    <h2>Annotation Dataset</h2>
     <div class="download-card" style="max-width:640px">
       <h3>WVDOH Sign Annotations — Label Studio Export</h3>
       <p class="card-desc">
@@ -180,7 +182,7 @@ python app.py
 
   <!-- ── Citation / Contact ── -->
   <div class="section-block">
-    <h2>Citation &amp; Contact <span class="todo-note">TODO: add paper citation</span></h2>
+    <h2>Citation &amp; Contact</h2>
 
     <div class="card-grid">
       <div class="download-card">
