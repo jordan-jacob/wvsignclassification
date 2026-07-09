@@ -73,6 +73,7 @@
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/grader.js"></script>
 <script>
 // =========================================================================
 // State
@@ -81,6 +82,8 @@ let clusters = [];        // all cluster objects from the server
 let markerMap = {};       // cluster_id → Leaflet CircleMarker
 let eventSource = null;
 let reviewedCount = 0;
+let currentPopup = null;  // { id, marker } of the open grader popup
+let tallyDiv = null;      // grader tally control element
 
 // =========================================================================
 // Map init
@@ -90,6 +93,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 19,
 }).addTo(map);
+
+buildGraderControls();
 
 // =========================================================================
 // Slider wiring
@@ -108,6 +113,8 @@ document.getElementById('inventory-file').addEventListener('change', function ()
 // Marker helpers
 // =========================================================================
 function markerColor(c) {
+  const dec = SignGrader.decisionColor(c.cluster_id);      // grader decision wins
+  if (dec) return dec;
   if (c.discrepancy_type === 'in_inventory_not_detected') return '#718096';
   if (c.discrepancy_type)                                  return '#e53e3e';
   if (!c.needs_review)                                     return '#38a169';
@@ -118,15 +125,15 @@ function markerRadius(c) {
   return Math.min(8 + (c.sighting_count || 1) * 1.5, 20);
 }
 
-function popupHtml(c) {
-  const thumb = c.sighting_count > 0
-    ? `<img src="/frame/${c.cluster_id}" style="max-width:190px;display:block;margin:4px 0;border-radius:3px"
-           onerror="this.style.display='none'" />`
-    : '';
-  const reviewed = !c.needs_review
-    ? '<div style="color:#38a169;font-weight:600;margin-top:6px">&#10003; Reviewed</div>'
-    : `<button class="popup-review-btn" onclick="markReviewed(${c.cluster_id})">Mark as Reviewed</button>`;
+function graderMeta(c) {
+  return {
+    sign_class: c.sign_class, lat: c.lat_median, lon: c.lon_median,
+    sighting_count: c.sighting_count,
+    thumbnail_url: c.thumbnail_url || `/frame/${c.cluster_id}`,
+  };
+}
 
+function popupHtml(c) {
   const rows = [
     ['Confidence', (c.confidence * 100).toFixed(1) + '%'],
     ['Sightings',  c.sighting_count],
@@ -136,15 +143,15 @@ function popupHtml(c) {
   if (c.review_reason)         rows.push(['Reason', `<em>${c.review_reason}</em>`]);
   if (c.discrepancy_type)      rows.push(['Discrepancy', c.discrepancy_type]);
   if (c.inventory_distance_m != null) rows.push(['Inv. dist.', c.inventory_distance_m + ' m']);
+  if (c.inventory_source)      rows.push(['Inv. source', c.inventory_source]);
   if (c.video_source)          rows.push(['Video', c.video_source]);
 
   const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 
-  return `<div style="min-width:200px">
+  return `<div class="grader-popup" style="min-width:220px">
     <strong style="font-size:13px">${c.sign_class}</strong>
-    ${thumb}
     <table>${tableRows}</table>
-    ${reviewed}
+    ${SignGrader.graderSectionHtml(c.cluster_id, graderMeta(c))}
   </div>`;
 }
 
@@ -170,16 +177,63 @@ function renderMarkers() {
       fillOpacity: 0.75,
       weight: 2,
     });
-    marker.bindPopup(popupHtml(c), { maxWidth: 260 });
+    marker.bindPopup(popupHtml(c), { maxWidth: 340 });
     marker.on('click', () => {
       marker.openPopup();
       highlightReviewItem(c.cluster_id);
     });
+    marker.on('popupopen', (e) => wireMarkerPopup(e.popup, marker, c));
+    marker.on('popupclose', () => { if (currentPopup && currentPopup.id === c.cluster_id) currentPopup = null; });
     marker.addTo(map);
     markerMap[c.cluster_id] = marker;
   });
 
   if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+  updateTally();
+}
+
+// =========================================================================
+// Grader popup wiring
+// =========================================================================
+function refreshMarker(c) {
+  const m = markerMap[c.cluster_id];
+  if (m) m.setStyle({ color: markerColor(c), fillColor: markerColor(c) });
+  updateTally();
+}
+
+function wireMarkerPopup(popup, marker, c) {
+  currentPopup = { id: c.cluster_id, marker };
+  const root = popup.getElement();
+  if (!root) return;
+  SignGrader.attachHandlers(root, c.cluster_id, graderMeta(c),
+    () => {                       // onChange: recolor + tally
+      refreshMarker(c);
+      // A decision also clears the server-side needs_review flag / queue item.
+      if (c.needs_review) markReviewed(c.cluster_id);
+    },
+    () => {                       // onSave: advance to next needs-review marker
+      marker.closePopup();
+      advanceToNextReview(c);
+    });
+}
+
+// Open the popup for the nearest unreviewed marker with needs_review: true.
+function advanceToNextReview(fromCluster) {
+  const graded = id => !!SignGrader.getReview(id);
+  const candidates = clusters.filter(
+    c => c.needs_review && !graded(c.cluster_id) &&
+         c.lat_median != null && markerMap[c.cluster_id]);
+  if (!candidates.length) return;
+  const fx = fromCluster.lat_median, fy = fromCluster.lon_median;
+  candidates.sort((a, b) => {
+    const da = (a.lat_median - fx) ** 2 + (a.lon_median - fy) ** 2;
+    const db = (b.lat_median - fx) ** 2 + (b.lon_median - fy) ** 2;
+    return da - db;
+  });
+  const next = candidates[0];
+  const m = markerMap[next.cluster_id];
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 16));
+  m.openPopup();
 }
 
 // =========================================================================
@@ -271,11 +325,148 @@ window.markReviewed = async function(clusterId) {
 
   const m = markerMap[clusterId];
   if (m) {
-    m.setStyle({ color: '#38a169', fillColor: '#38a169' });
-    m.setPopupContent(popupHtml(c));
+    m.setStyle({ color: markerColor(c), fillColor: markerColor(c) });
+    // Don't rebuild the popup while it's open — it would drop the wired grader
+    // handlers the reviewer is interacting with.
+    if (!(currentPopup && currentPopup.id === clusterId)) m.setPopupContent(popupHtml(c));
   }
   renderReviewQueue();
 };
+
+// =========================================================================
+// Grader controls: tally, thumbnail toggle, export / import, keyboard
+// =========================================================================
+function currentVideoSource() {
+  const c = clusters.find(x => x.video_source);
+  return c ? c.video_source : null;
+}
+
+function updateTally() {
+  if (!tallyDiv) return;
+  const t = SignGrader.tally();
+  const total = clusters.filter(c => c.sighting_count > 0 || c.discrepancy_type).length;
+  tallyDiv.innerHTML =
+    `<strong>Reviewed: ${t.reviewed} / ${total}</strong>` +
+    `<div class="tally-sub">${t.correct} correct · ${t.wrong} wrong · ${t.unclear} unclear</div>`;
+}
+
+function refreshOpenPopup() {
+  if (!currentPopup) return;
+  const c = clusters.find(x => x.cluster_id === currentPopup.id);
+  if (!c) return;
+  const popup = currentPopup.marker.getPopup();
+  popup.setContent(popupHtml(c));
+  const root = popup.getElement();
+  if (root) wireMarkerPopup(popup, currentPopup.marker, c);
+}
+
+function buildGraderControls() {
+  const tally = L.control({ position: 'topright' });
+  tally.onAdd = function () {
+    const div = L.DomUtil.create('div', 'grader-tally');
+    L.DomEvent.disableClickPropagation(div);
+    tallyDiv = div;
+    div.innerHTML = 'Reviewed: 0 / 0';
+    return div;
+  };
+  tally.addTo(map);
+
+  const panel = L.control({ position: 'topright' });
+  panel.onAdd = function () {
+    const div = L.DomUtil.create('div', 'grader-tally grader-controls');
+    L.DomEvent.disableClickPropagation(div);
+    const on = SignGrader.thumbnailsOn();
+    div.innerHTML = `
+      <label class="grader-toggle">
+        <input type="checkbox" id="thumb-toggle" ${on ? 'checked' : ''}/> Show detection thumbnails
+      </label>
+      <div class="grader-toggle-note" id="thumb-note" style="${on ? 'display:none' : ''}">
+        Thumbnails require the local app (sign_mapper/) to be running.
+      </div>
+      <div class="grader-io-row">
+        <button id="export-reviews">Export Reviews</button>
+        <button id="import-reviews">Import Reviews</button>
+      </div>
+      <input type="file" id="import-file" accept=".json" style="display:none"/>`;
+    return div;
+  };
+  panel.addTo(map);
+
+  const about = L.control({ position: 'bottomright' });
+  about.onAdd = function () {
+    const div = L.DomUtil.create('div', 'about-data-panel');
+    L.DomEvent.disableClickPropagation(div);
+    div.innerHTML =
+      `<strong>About this data</strong><br>` +
+      `Sign inventory provided by WVDOH open-access GIS data (July 2026). ` +
+      `Warning signs are not included in the current inventory snapshot — comparison ` +
+      `for the Warning class is one-directional (detections only). ` +
+      `Full sign feature class pending from WVDOH.`;
+    return div;
+  };
+  about.addTo(map);
+
+  document.getElementById('thumb-toggle').addEventListener('change', function () {
+    SignGrader.toggleThumbnails(this.checked);
+    document.getElementById('thumb-note').style.display = this.checked ? 'none' : '';
+    refreshOpenPopup();
+  });
+  document.getElementById('export-reviews').addEventListener('click', () => {
+    SignGrader.setVideoSource(currentVideoSource());
+    SignGrader.downloadJson(SignGrader.exportReviews(), 'reviews.json');
+  });
+  const importFile = document.getElementById('import-file');
+  document.getElementById('import-reviews').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', () => {
+    const f = importFile.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        SignGrader.importReviews(JSON.parse(e.target.result));
+        renderMarkers();
+      } catch (err) { alert('Invalid reviews JSON: ' + err.message); }
+    };
+    reader.readAsText(f);
+    importFile.value = '';
+  });
+}
+
+// Keyboard shortcuts while a grader popup is open
+document.addEventListener('keydown', e => {
+  if (!currentPopup) return;
+  const inField = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+  const key = e.key.toLowerCase();
+  if (inField && key !== 'escape' && key !== 'enter') return;
+
+  const c = clusters.find(x => x.cluster_id === currentPopup.id);
+  if (!c) return;
+  const decMap = { c: 'correct', w: 'wrong_class', u: 'unclear' };
+
+  if (decMap[key]) {
+    SignGrader.decide(c.cluster_id, decMap[key], graderMeta(c));
+    const root = currentPopup.marker.getPopup().getElement();
+    if (root) root.querySelectorAll('.grader-btn')
+      .forEach(b => b.classList.toggle('sel', b.dataset.decision === decMap[key]));
+    refreshMarker(c);
+    if (c.needs_review) markReviewed(c.cluster_id);
+  } else if (key === 'enter') {
+    e.preventDefault();
+    const root = currentPopup.marker.getPopup().getElement();
+    const note = root && root.querySelector('.grader-note');
+    SignGrader.setNote(c.cluster_id, note ? note.value : '', graderMeta(c));
+    refreshMarker(c);
+    currentPopup.marker.closePopup();
+    advanceToNextReview(c);
+  } else if (key === 'escape') {
+    currentPopup.marker.closePopup();
+  } else if (key === 't') {
+    const state = SignGrader.toggleThumbnails();
+    const cb = document.getElementById('thumb-toggle'); if (cb) cb.checked = state;
+    const note = document.getElementById('thumb-note'); if (note) note.style.display = state ? 'none' : '';
+    refreshOpenPopup();
+  }
+});
 
 // =========================================================================
 // Progress log helper

@@ -269,3 +269,62 @@ input[type="range"] {
   width: 100%;
 }
 .popup-review-btn:hover { background: #2f855a; }
+
+/* ── SignGrader — in-place grader workflow (shared block, see grader.js) ── */
+.grader-thumb {
+  display: block;
+  max-width: 320px;
+  max-height: 240px;
+  width: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  margin: 2px 0 8px;
+}
+.grader-decision-label { font-size: 11px; font-weight: 600; color: #4a5568; margin-top: 6px; }
+.grader-btns { display: flex; gap: 4px; margin: 4px 0; }
+.grader-btn {
+  flex: 1; padding: 4px 2px; font-size: 11px; cursor: pointer;
+  border: 1px solid #cbd5e0; border-radius: 4px; background: #fff; color: #2d3748;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.grader-btn:hover { background: #edf2f7; }
+.grader-btn[data-decision="correct"].sel    { background: #38a169; border-color: #38a169; color: #fff; }
+.grader-btn[data-decision="wrong_class"].sel { background: #e53e3e; border-color: #e53e3e; color: #fff; }
+.grader-btn[data-decision="unclear"].sel     { background: #805ad5; border-color: #805ad5; color: #fff; }
+.grader-note-row { display: flex; gap: 4px; margin-top: 6px; }
+.grader-note {
+  flex: 1; min-width: 0; padding: 4px 6px; font-size: 11px;
+  border: 1px solid #cbd5e0; border-radius: 4px;
+}
+.grader-save {
+  padding: 4px 10px; font-size: 11px; cursor: pointer; color: #fff;
+  background: #3182ce; border: none; border-radius: 4px;
+}
+.grader-save:hover { background: #2b6cb0; }
+
+/* Running tally — top-right of the map */
+.grader-tally {
+  background: rgba(255,255,255,.95); padding: 6px 10px; border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 12px; color: #2d3748; line-height: 1.4;
+}
+.grader-tally strong { color: #1a202c; }
+.grader-tally .tally-sub { color: #718096; font-size: 11px; }
+
+/* Thumbnail toggle + export/import controls */
+.grader-controls { display: flex; flex-direction: column; gap: 6px; }
+.grader-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #2d3748; cursor: pointer; }
+.grader-toggle-note { font-size: 11px; color: #a0aec0; margin-top: 2px; }
+.grader-io-row { display: flex; gap: 6px; }
+.grader-io-row button {
+  flex: 1; padding: 5px 6px; font-size: 11px; cursor: pointer;
+  border: 1px solid #cbd5e0; border-radius: 4px; background: #fff; color: #2d3748;
+}
+.grader-io-row button:hover { background: #edf2f7; }
+
+/* "About this data" info panel */
+.about-data-panel {
+  background: rgba(255,255,255,.95); padding: 8px 10px; border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 11px; color: #4a5568;
+  max-width: 260px; line-height: 1.45;
+}
+.about-data-panel strong { color: #2d3748; }

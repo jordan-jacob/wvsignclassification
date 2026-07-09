@@ -156,9 +156,11 @@ def _run_inference(model, class_names, video_path, fixes, conf_threshold,
 
 def _save_thumb(frame, x1, y1, x2, y2, path: Path):
     h, w = frame.shape[:2]
-    pad = 20
-    crop = frame[max(0, int(y1) - pad):min(h, int(y2) + pad),
-                 max(0, int(x1) - pad):min(w, int(x2) + pad)]
+    # 40% padding on each side (relative to box size) for context around the sign
+    pad_x = 0.4 * (x2 - x1)
+    pad_y = 0.4 * (y2 - y1)
+    crop = frame[max(0, int(y1 - pad_y)):min(h, int(y2 + pad_y)),
+                 max(0, int(x1 - pad_x)):min(w, int(x2 + pad_x))]
     if crop.size == 0:
         crop = frame
     scale = min(320 / crop.shape[1], 240 / crop.shape[0], 1.0)
@@ -230,6 +232,9 @@ def _cluster(detections, video_name, output_dir):
             'inventory_match': None,
             'inventory_distance_m': None,
             'discrepancy_type': None,
+            # Resolves only while the local Flask app is serving /frame/<id>;
+            # 404s gracefully on GitHub Pages (handled client-side).
+            'thumbnail_url': f'/frame/{cluster_id}',
         })
 
     # Clean up per-detection thumbnails
@@ -360,7 +365,9 @@ if __name__ == '__main__':
     ap.add_argument('--sidecar', required=True)
     ap.add_argument('--model', required=True)
     ap.add_argument('--output', required=True, help='Output GeoJSON path')
-    ap.add_argument('--inventory', help='Optional WVDOH inventory GeoJSON')
+    ap.add_argument('--inventory', help='Optional single WVDOH inventory GeoJSON')
+    ap.add_argument('--inventory-dir', dest='inventory_dir',
+                    help='Directory of WVDOH inventory GeoJSONs (merged before comparison)')
     ap.add_argument('--annotations-dir', dest='annotations_dir',
                     help='Directory of YOLO-format .txt labels (frame_<ts_ms>.txt)')
     ap.add_argument('--conf', type=float, default=0.5, help='Confidence threshold')
@@ -378,9 +385,15 @@ if __name__ == '__main__':
         annotations_dir=args.annotations_dir,
     )
 
-    if args.inventory:
-        from geojson_utils import load_geojson, compare_with_inventory
-        inv = load_geojson(args.inventory)
+    if args.inventory_dir:
+        from geojson_utils import load_inventory_dir, compare_with_inventory
+        print(f"Loading inventory directory: {args.inventory_dir}")
+        inv = load_inventory_dir(args.inventory_dir)
+        print(f"Merged inventory: {len(inv['features'])} features")
+        clusters = compare_with_inventory(clusters, inv)
+    elif args.inventory:
+        from geojson_utils import load_geojson, normalize_inventory, compare_with_inventory
+        inv = normalize_inventory(load_geojson(args.inventory), Path(args.inventory).name)
         clusters = compare_with_inventory(clusters, inv)
 
     from geojson_utils import save_geojson

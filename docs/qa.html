@@ -28,9 +28,15 @@
     <h2>Annotation QA Review</h2>
     <p>
       Load a <code>qa_report.json</code> (inference-vs-annotation mismatches from the local
-      pipeline) or a <code>discrepancies.json</code> (inventory-vs-detection discrepancies)
-      to start the review workflow.
+      pipeline), a <code>discrepancies.json</code> (inventory-vs-detection discrepancies),
+      or a <code>reviews.json</code> (human grader decisions exported from the map).
     </p>
+
+    <div class="qa-format-select">
+      <span>Load:</span>
+      <label><input type="radio" name="qa-format" value="qa" /> QA Report (model vs annotation)</label>
+      <label><input type="radio" name="qa-format" value="review" checked /> Review Export (map grader decisions)</label>
+    </div>
 
     <div class="drop-zone" id="qa-drop-zone">
       <strong>Drop file here or click to browse</strong>
@@ -75,6 +81,21 @@
         <p class="qa-empty">Select an item from the queue to begin review.</p>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ── Review-export summary (grader decisions from the map) ── -->
+  <div id="qa-review-export" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+    <div id="rx-header">
+      <div id="rx-stats"></div>
+      <button class="btn btn-secondary" id="rx-csv-btn">Export re-annotation list (CSV)</button>
+    </div>
+    <div id="rx-body">
+      <div id="rx-table-header">
+        Wrong-class detections
+        <input id="rx-filter" type="text" placeholder="Filter by class or note…" />
+      </div>
+      <div id="rx-table-wrap"><table id="rx-table"></table></div>
     </div>
   </div>
 

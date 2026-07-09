@@ -72,7 +72,10 @@ def start_processing():
     model_file = request.files.get('model')
     video_file = request.files.get('video')
     sidecar_file = request.files.get('sidecar')
-    inventory_file = request.files.get('inventory')
+    inventory_files = request.files.getlist('inventory')  # 0, 1, or many
+    # Server-side directory of WVDOH GeoJSONs (e.g. Desktop/wvdoh_signs), the
+    # web-app equivalent of the CLI's --inventory-dir flag.
+    inventory_dir = (request.form.get('inventory_dir') or '').strip()
 
     if not all([model_file, video_file, sidecar_file]):
         return jsonify({'error': 'model, video, and sidecar are required'}), 400
@@ -92,10 +95,12 @@ def start_processing():
     video_file.save(str(video_path))
     sidecar_file.save(str(sidecar_path))
 
-    inventory_path = None
-    if inventory_file and inventory_file.filename:
-        inventory_path = upload_dir / inventory_file.filename
-        inventory_file.save(str(inventory_path))
+    inventory_paths = []
+    for inv_file in inventory_files:
+        if inv_file and inv_file.filename:
+            p = upload_dir / inv_file.filename
+            inv_file.save(str(p))
+            inventory_paths.append(p)
 
     # Clear frames from previous run
     frames_dir = OUTPUTS_DIR / 'frames'
@@ -115,7 +120,9 @@ def start_processing():
         try:
             # Import here so the module search path (sign_mapper/) is already set
             from pipeline import run_pipeline
-            from geojson_utils import compare_with_inventory, load_geojson, save_geojson
+            from geojson_utils import (compare_with_inventory, load_geojson,
+                                       load_inventory_dir, normalize_inventory,
+                                       save_geojson)
 
             clusters = run_pipeline(
                 model_path=model_path,
@@ -126,9 +133,23 @@ def start_processing():
                 progress=_emit,
             )
 
-            if inventory_path and inventory_path.exists():
-                _emit("Comparing with WVDOH inventory...")
-                inv = load_geojson(inventory_path)
+            inv = None
+            if inventory_dir:
+                _emit(f"Loading inventory directory: {inventory_dir}")
+                inv = load_inventory_dir(inventory_dir)
+            elif len(inventory_paths) > 1:
+                _emit(f"Merging {len(inventory_paths)} inventory files...")
+                merged = {'type': 'FeatureCollection', 'features': []}
+                for p in inventory_paths:
+                    merged['features'].extend(
+                        normalize_inventory(load_geojson(p), p.name)['features'])
+                inv = merged
+            elif inventory_paths:
+                inv = normalize_inventory(load_geojson(inventory_paths[0]),
+                                          inventory_paths[0].name)
+
+            if inv is not None:
+                _emit(f"Comparing with WVDOH inventory ({len(inv['features'])} features)...")
                 clusters = compare_with_inventory(clusters, inv, match_radius_m=match_radius)
                 n_disc = sum(1 for c in clusters if c.get('discrepancy_type'))
                 _emit(f"Inventory comparison complete — {n_disc} discrepancies flagged")

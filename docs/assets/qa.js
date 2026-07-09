@@ -84,6 +84,90 @@ function normalizeReport(data) {
   }
 }
 
+// ── Load dispatcher ──────────────────────────────────────────────────────────
+// Review-export files (from the map's "Export Reviews") have a top-level
+// `reviews` object; qa_report/discrepancy files don't. Structure wins over the
+// radio hint so a mislabeled load still renders correctly.
+function handleLoadedData(data) {
+  if (data && data.reviews && !data.items && !data.discrepancies) {
+    loadReviewExport(data);
+  } else {
+    loadReport(data);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// ── Review-export view (human grader decisions from the map) ─────────────────
+function loadReviewExport(data) {
+  const reviews = data.reviews || {};
+  const rows = Object.entries(reviews).map(([id, r]) => Object.assign({ cluster_id: id }, r));
+  const decided = rows.filter(r => r.decision);
+  const total = decided.length;
+  const correct = decided.filter(r => r.decision === 'correct').length;
+  const wrong = decided.filter(r => r.decision === 'wrong_class');
+  const unclear = decided.filter(r => r.decision === 'unclear').length;
+
+  document.getElementById('qa-drop-screen').style.display = 'none';
+  document.getElementById('qa-main').style.display = 'none';
+  document.getElementById('qa-review-export').style.display = 'flex';
+
+  const pct = n => total ? ` ${((n / total) * 100).toFixed(0)}%` : '';
+  document.getElementById('rx-stats').innerHTML = `
+    <div class="rx-stat"><span class="rx-num">${total}</span><span class="rx-lbl">Reviewed</span></div>
+    <div class="rx-stat correct"><span class="rx-num">${correct}</span><span class="rx-lbl">Correct${pct(correct)}</span></div>
+    <div class="rx-stat wrong"><span class="rx-num">${wrong.length}</span><span class="rx-lbl">Wrong${pct(wrong.length)}</span></div>
+    <div class="rx-stat unclear"><span class="rx-num">${unclear}</span><span class="rx-lbl">Unclear${pct(unclear)}</span></div>`;
+
+  // Prefer the explicit wrong_class_summary when present, else derive it.
+  const wrongItems = (data.wrong_class_summary && data.wrong_class_summary.length)
+    ? data.wrong_class_summary.map(w => ({
+        cluster_id: w.cluster_id, sign_class: w.predicted, lat: w.lat, lon: w.lon, note: w.note }))
+    : wrong.map(r => ({
+        cluster_id: r.cluster_id, sign_class: r.sign_class, lat: r.lat, lon: r.lon, note: r.note }));
+
+  renderWrongTable(wrongItems, '');
+  document.getElementById('rx-filter').value = '';
+  document.getElementById('rx-filter').oninput = e => renderWrongTable(wrongItems, e.target.value);
+  document.getElementById('rx-csv-btn').onclick = () => exportReannotationCsv(wrongItems, data.video_source);
+}
+
+function renderWrongTable(items, filter) {
+  const f = (filter || '').toLowerCase();
+  const shown = items.filter(it =>
+    !f || (it.sign_class || '').toLowerCase().includes(f) || (it.note || '').toLowerCase().includes(f));
+  const body = shown.map(it => `
+    <tr>
+      <td class="rx-mono">${it.cluster_id}</td>
+      <td>${it.sign_class || '—'}</td>
+      <td class="rx-mono">${it.lat != null ? Number(it.lat).toFixed(5) : '—'}, ${it.lon != null ? Number(it.lon).toFixed(5) : '—'}</td>
+      <td>${it.note ? escapeHtml(it.note) : '<span style="color:#a0aec0">—</span>'}</td>
+    </tr>`).join('');
+  document.getElementById('rx-table').innerHTML =
+    '<thead><tr><th>Cluster</th><th>Predicted class</th><th>Lat, Lon</th><th>Note</th></tr></thead>' +
+    `<tbody>${body || '<tr><td colspan="4" style="color:#a0aec0;padding:16px">No wrong-class detections.</td></tr>'}</tbody>`;
+}
+
+function exportReannotationCsv(items, videoSource) {
+  const esc = v => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const header = ['cluster_id', 'predicted_class', 'lat', 'lon', 'note', 'video_source'];
+  const lines = [header.join(',')];
+  items.forEach(it => lines.push(
+    [esc(it.cluster_id), esc(it.sign_class), esc(it.lat), esc(it.lon), esc(it.note), esc(videoSource)].join(',')));
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reannotation_list.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 // ── Load report ────────────────────────────────────────────────────────────
 function loadReport(data) {
   report = normalizeReport(data);
@@ -316,7 +400,7 @@ function loadFileIntoQA(file) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      loadReport(JSON.parse(e.target.result));
+      handleLoadedData(JSON.parse(e.target.result));
     } catch (err) {
       alert('Could not load file: ' + err.message);
     }
@@ -328,10 +412,10 @@ function loadFileIntoQA(file) {
 document.getElementById('load-demo-btn').addEventListener('click', () => {
   fetch('data/demo_discrepancies.json')
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-    .then(data => loadReport(data))
+    .then(data => handleLoadedData(data))
     .catch(err => {
       // fetch() is blocked under file:// — fall back to the embedded copy.
-      if (window.__DEMO_DISCREPANCIES__) { loadReport(window.__DEMO_DISCREPANCIES__); return; }
+      if (window.__DEMO_DISCREPANCIES__) { handleLoadedData(window.__DEMO_DISCREPANCIES__); return; }
       alert('Could not load demo data: ' + err.message);
     });
 });

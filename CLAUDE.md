@@ -9,14 +9,21 @@ using computer vision and image segmentation on dashcam video from WVDOH.
 ## Pipeline (planned)
 1. Pre-train backbone on MTSD (global, binary detection)
 2. Fine-tune classification head on MTSD North America + LISA (47 MUTCD classes)
-3. Fine-tune on WVDOH dashcam footage (pending data delivery)
+3. Fine-tune on WVDOH dashcam footage (data available — see below)
 4. Spatial post-processing layer over WV road network graph (STGAN-style)
    to flag segments where expected signs are absent or undetected
 
 ## Data locations (local, not in repo)
 - LISA (Kaggle mirror, 47 classes, CSV annotations): data/lisa/
 - MTSD (fully annotated, ~52K images, per-image JSON): data/mtsd/
-- WVDOH dashcam footage: not yet received
+- WVDOH dashcam footage: download manifest at Desktop/wvu_sample_manifest_2.csv
+  (1,050 videos + per-video GPS CSV sidecars, OCI object-storage links;
+  columns: video_id, video_link, csv_link, sign_system_label, primary_county).
+  Sidecars parse via sign_mapper/gps_parser.py (ExifTool CSV form).
+- WVDOH open-access sign inventory GeoJSONs: Desktop/wvdoh_signs/
+  (10 files, ~220K point features; classifying fields MUTCDCODE/MUTCDCAT.
+  No comprehensive Warning feature class yet — see sign_mapper/geojson_utils.py.
+  Normalized to the 9-class model taxonomy by normalize_wvdoh_class()).
 
 ## Key design decisions
 - Backbone: ResNet-50, ImageNet init
