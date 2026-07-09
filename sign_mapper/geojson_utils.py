@@ -133,7 +133,8 @@ def save_geojson(clusters: list, path, video_source=None):
     for c in clusters:
         if c.get('lat_median') is None or c.get('lon_median') is None:
             continue
-        props = {k: v for k, v in c.items() if k not in ('lat_median', 'lon_median', 'cluster_id')}
+        # Keep cluster_id in properties — the map keys markers / grader reviews by it.
+        props = {k: v for k, v in c.items() if k not in ('lat_median', 'lon_median')}
         if video_source and 'video_source' not in props:
             props['video_source'] = video_source
         features.append({

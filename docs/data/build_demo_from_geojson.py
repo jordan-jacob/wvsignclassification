@@ -34,6 +34,27 @@ def main():
     src = Path(sys.argv[1])
     fc = json.loads(src.read_text(encoding='utf-8'))
     feats = fc.get('features', [])
+
+    # Ensure every feature has a stable, unique cluster_id in its properties (the
+    # map keys markers / grader reviews by it). Older save_geojson dropped it, so
+    # recover it from thumbnail_url (/frame/<id>); assign remaining ones ids above
+    # the max so synthetic (inventory-only) features never collide.
+    used = set()
+    for f in feats:
+        p = f.setdefault('properties', {})
+        if p.get('cluster_id') is None:
+            m = re.search(r'/frame/(\d+)', p.get('thumbnail_url') or '')
+            if m:
+                p['cluster_id'] = int(m.group(1))
+        if p.get('cluster_id') is not None:
+            used.add(p['cluster_id'])
+    next_id = (max(used) + 1) if used else 0
+    for f in feats:
+        p = f['properties']
+        if p.get('cluster_id') is None:
+            p['cluster_id'] = next_id
+            next_id += 1
+
     video = sys.argv[2] if len(sys.argv) > 2 else next(
         (f['properties'].get('video_source') for f in feats
          if f['properties'].get('video_source')), None)

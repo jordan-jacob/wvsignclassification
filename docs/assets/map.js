@@ -4,7 +4,7 @@ const DEMO_GEOJSON = 'data/demo_detections.geojson';
 
 // Human-readable label for the demo route (real WVDOH dashcam run).
 // Updated by Task 2 to match the selected inference video.
-const ROUTE_LABEL = 'Wetzel County, WV — US Route (Apr 2026)';
+const ROUTE_LABEL = 'Wirt County, WV — Municipal route (Oct 2025)';
 
 // ── Color helpers ──────────────────────────────────────────────────────────
 function markerColor(props) {
