@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WV Sign Detection — Map</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="assets/style.css" />
+<style>
+  /* Override body scroll for the map page */
+  html, body { height: 100%; overflow: hidden; }
+  .leaflet-popup-content { font-size: 12px; }
+  .leaflet-popup-content table { border-collapse: collapse; width: 100%; }
+  .leaflet-popup-content td { padding: 2px 4px; font-size: 11px; }
+  .leaflet-popup-content td:first-child { color: #718096; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html">WV Sign Detection</a>
+  <div class="nav-links">
+    <a href="index.html" class="active">Map</a>
+    <a href="downloads.html">Downloads</a>
+    <a href="qa.html">QA Review</a>
+    <a href="http://localhost:5000" class="local-link" target="_blank" rel="noopener">Local App ↗</a>
+  </div>
+</nav>
+
+<div id="map-page">
+
+  <!-- ── Sidebar ── -->
+  <div id="map-sidebar">
+    <div id="map-sidebar-inner">
+
+      <div>
+        <h2>Sign Detections</h2>
+        <p style="font-size:12px;color:#718096;margin-top:4px">
+          US-19 corridor, Summersville WV — demo dataset
+        </p>
+      </div>
+
+      <!-- Upload zone -->
+      <div>
+        <div class="sidebar-label">Load your own GeoJSON</div>
+        <div class="drop-zone" id="upload-drop-zone">
+          <strong>Drop file here or click to browse</strong>
+          <p>Output from the local Sign Mapper app</p>
+          <p style="margin-top:4px;font-size:11px">.geojson / .json</p>
+        </div>
+        <input type="file" id="geojson-file-input" accept=".geojson,.json"
+               style="display:none" />
+        <p id="load-status" style="font-size:11px;margin-top:6px;color:#718096">
+          Loading demo data…
+        </p>
+      </div>
+
+      <!-- Legend -->
+      <div>
+        <div class="sidebar-label">Legend</div>
+        <div id="legend">
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#38a169"></div>
+            <span>Detected, no issues</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#d69e2e"></div>
+            <span>Needs review (low conf / split vote)</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#e53e3e"></div>
+            <span>Inventory discrepancy</span>
+          </div>
+          <div class="legend-row">
+            <div class="legend-dot" style="background:#718096"></div>
+            <span>In inventory, not detected</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div id="stats-panel" style="display:none">
+        <div class="sidebar-label">Summary</div>
+        <div class="stat-row"><span>Total clusters</span><strong id="stat-total">—</strong></div>
+        <div class="stat-row"><span>Needs review</span><strong id="stat-review">—</strong></div>
+        <div class="stat-row"><span>Discrepancies</span><strong id="stat-disc">—</strong></div>
+        <div class="stat-row"><span>Top class</span><strong id="stat-top">—</strong></div>
+      </div>
+
+      <!-- Links -->
+      <div style="font-size:12px;color:#718096;border-top:1px solid #e2e8f0;padding-top:12px">
+        <p>Run inference locally with the
+          <a href="downloads.html#local-app" style="color:#3182ce">Sign Mapper app</a>,
+          then drag &amp; drop the exported GeoJSON here to visualize it.</p>
+        <p style="margin-top:6px">
+          <a href="downloads.html" style="color:#3182ce">Download model checkpoints →</a>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Map ── -->
+  <div id="map-container">
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="assets/map.js"></script>
+</body>
+</html>

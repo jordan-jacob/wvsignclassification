@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WV Sign Detection — QA Review</title>
+<link rel="stylesheet" href="assets/style.css" />
+<style>
+  html, body { height: 100%; overflow: hidden; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-brand" href="index.html">WV Sign Detection</a>
+  <div class="nav-links">
+    <a href="index.html">Map</a>
+    <a href="downloads.html">Downloads</a>
+    <a href="qa.html" class="active">QA Review</a>
+    <a href="http://localhost:5000" class="local-link" target="_blank" rel="noopener">Local App ↗</a>
+  </div>
+</nav>
+
+<div id="qa-page">
+
+  <!-- ── Drop screen (initial state) ── -->
+  <div id="qa-drop-screen">
+    <h2>Annotation QA Review</h2>
+    <p>
+      Load a <code>qa_report.json</code> (inference-vs-annotation mismatches from the local
+      pipeline) or a <code>discrepancies.json</code> (inventory-vs-detection discrepancies)
+      to start the review workflow.
+    </p>
+
+    <div class="drop-zone" id="qa-drop-zone">
+      <strong>Drop file here or click to browse</strong>
+      <p><code>qa_report.json</code> or <code>demo_discrepancies.json</code></p>
+    </div>
+    <input type="file" id="qa-file-input" accept=".json" style="display:none" />
+
+    <button class="demo-link" id="load-demo-btn">
+      Or load the demo discrepancy report →
+    </button>
+
+    <p style="font-size:12px;color:#a0aec0;margin-top:8px">
+      All processing is client-side — no data is uploaded anywhere.
+    </p>
+  </div>
+
+  <!-- ── Main QA interface (hidden until a file is loaded) ── -->
+  <div id="qa-main" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+
+    <!-- Progress header -->
+    <div id="qa-header">
+      <div id="qa-progress-wrap">
+        <div id="qa-progress-bar"></div>
+      </div>
+      <span id="qa-progress-text">0 of 0 reviewed</span>
+      <button class="btn btn-secondary qa-export-btn" id="qa-export-btn" style="display:none">
+        Export JSON
+      </button>
+    </div>
+
+    <!-- Two-column layout -->
+    <div id="qa-columns">
+
+      <!-- Left: review queue -->
+      <div id="qa-queue">
+        <div id="qa-queue-header">Review queue — sorted by confidence ↑</div>
+        <div id="qa-queue-list"></div>
+      </div>
+
+      <!-- Right: detail view -->
+      <div id="qa-detail">
+        <p class="qa-empty">Select an item from the queue to begin review.</p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script src="assets/qa.js"></script>
+</body>
+</html>

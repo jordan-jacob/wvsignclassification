@@ -1,0 +1,9 @@
+# Core deps (already present in the project venv)
+ultralytics
+opencv-python
+numpy
+scikit-learn
+flask
+
+# scipy is available in the venv but not used by sign_mapper directly
+# geojson package is NOT needed — stdlib json is sufficient

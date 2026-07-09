@@ -4,3 +4,5 @@ runs/
 .labelstudio-venv/
 *-venv/
 logs/
+sign_mapper/build/
+sign_mapper/dist/

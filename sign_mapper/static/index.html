@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WV Sign Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== LEFT PANEL ===== -->
+  <div id="left-panel">
+    <h2>WV Sign Mapper</h2>
+
+    <div class="section">
+      <label>YOLO Checkpoint (.pt)</label>
+      <input type="file" id="model-file" accept=".pt" />
+
+      <label>Dashcam Video</label>
+      <input type="file" id="video-file" accept=".mp4,.avi,.mov,.mkv" />
+
+      <label>GPS Sidecar (.srt or .csv)</label>
+      <input type="file" id="sidecar-file" accept=".srt,.csv" />
+
+      <label>Inventory GeoJSON (optional)</label>
+      <input type="file" id="inventory-file" accept=".geojson,.json" />
+    </div>
+
+    <div class="section">
+      <div class="range-row">
+        <label>Confidence Threshold</label>
+        <span class="range-val" id="conf-val">0.50</span>
+      </div>
+      <input type="range" id="conf-slider" min="0.1" max="0.9" step="0.05" value="0.5" />
+
+      <div id="radius-section" style="display:none">
+        <div class="range-row" style="margin-top:8px">
+          <label>Inventory Match Radius</label>
+          <span class="range-val"><span id="radius-val">25</span>m</span>
+        </div>
+        <input type="range" id="radius-slider" min="5" max="100" step="5" value="25" />
+      </div>
+    </div>
+
+    <button class="btn-primary" id="run-btn">Run Processing</button>
+
+    <div id="progress-section" style="display:none">
+      <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <div id="log-box"></div>
+    </div>
+
+    <button class="btn-secondary" id="export-btn" disabled>Export GeoJSON</button>
+  </div>
+
+  <!-- ===== CENTER PANEL ===== -->
+  <div id="center-panel">
+    <div id="map"></div>
+  </div>
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div id="right-panel">
+    <div id="review-header">
+      <strong>Review Queue</strong>
+      <span id="review-count">—</span>
+    </div>
+    <div id="review-list">
+      <p class="review-empty">Run processing to populate the review queue.</p>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// =========================================================================
+// State
+// =========================================================================
+let clusters = [];        // all cluster objects from the server
+let markerMap = {};       // cluster_id → Leaflet CircleMarker
+let eventSource = null;
+let reviewedCount = 0;
+
+// =========================================================================
+// Map init
+// =========================================================================
+const map = L.map('map').setView([38.5, -80.5], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+// =========================================================================
+// Slider wiring
+// =========================================================================
+document.getElementById('conf-slider').addEventListener('input', function () {
+  document.getElementById('conf-val').textContent = parseFloat(this.value).toFixed(2);
+});
+document.getElementById('radius-slider').addEventListener('input', function () {
+  document.getElementById('radius-val').textContent = this.value;
+});
+document.getElementById('inventory-file').addEventListener('change', function () {
+  document.getElementById('radius-section').style.display = this.files.length ? '' : 'none';
+});
+
+// =========================================================================
+// Marker helpers
+// =========================================================================
+function markerColor(c) {
+  if (c.discrepancy_type === 'in_inventory_not_detected') return '#718096';
+  if (c.discrepancy_type)                                  return '#e53e3e';
+  if (!c.needs_review)                                     return '#38a169';
+  return '#d69e2e';
+}
+
+function markerRadius(c) {
+  return Math.min(8 + (c.sighting_count || 1) * 1.5, 20);
+}
+
+function popupHtml(c) {
+  const thumb = c.sighting_count > 0
+    ? `<img src="/frame/${c.cluster_id}" style="max-width:190px;display:block;margin:4px 0;border-radius:3px"
+           onerror="this.style.display='none'" />`
+    : '';
+  const reviewed = !c.needs_review
+    ? '<div style="color:#38a169;font-weight:600;margin-top:6px">&#10003; Reviewed</div>'
+    : `<button class="popup-review-btn" onclick="markReviewed(${c.cluster_id})">Mark as Reviewed</button>`;
+
+  const rows = [
+    ['Confidence', (c.confidence * 100).toFixed(1) + '%'],
+    ['Sightings',  c.sighting_count],
+    ['Vote %',     (c.class_vote_pct * 100).toFixed(0) + '%'],
+    ['Needs review', c.needs_review ? '⚠ Yes' : '✓ No'],
+  ];
+  if (c.review_reason)         rows.push(['Reason', `<em>${c.review_reason}</em>`]);
+  if (c.discrepancy_type)      rows.push(['Discrepancy', c.discrepancy_type]);
+  if (c.inventory_distance_m != null) rows.push(['Inv. dist.', c.inventory_distance_m + ' m']);
+  if (c.video_source)          rows.push(['Video', c.video_source]);
+
+  const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+
+  return `<div style="min-width:200px">
+    <strong style="font-size:13px">${c.sign_class}</strong>
+    ${thumb}
+    <table>${tableRows}</table>
+    ${reviewed}
+  </div>`;
+}
+
+// =========================================================================
+// Render map markers
+// =========================================================================
+function renderMarkers() {
+  Object.values(markerMap).forEach(m => map.removeLayer(m));
+  markerMap = {};
+
+  if (!clusters.length) return;
+
+  const bounds = [];
+  clusters.forEach(c => {
+    if (c.lat_median == null || c.lon_median == null) return;
+    const ll = [c.lat_median, c.lon_median];
+    bounds.push(ll);
+
+    const marker = L.circleMarker(ll, {
+      radius: markerRadius(c),
+      color: markerColor(c),
+      fillColor: markerColor(c),
+      fillOpacity: 0.75,
+      weight: 2,
+    });
+    marker.bindPopup(popupHtml(c), { maxWidth: 260 });
+    marker.on('click', () => {
+      marker.openPopup();
+      highlightReviewItem(c.cluster_id);
+    });
+    marker.addTo(map);
+    markerMap[c.cluster_id] = marker;
+  });
+
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+}
+
+// =========================================================================
+// Review queue
+// =========================================================================
+function renderReviewQueue() {
+  const needsReview = clusters.filter(c => c.needs_review);
+  const totalReviewable = clusters.filter(
+    c => c.sighting_count > 0 || c.discrepancy_type
+  ).length;
+  reviewedCount = totalReviewable - needsReview.length;
+
+  document.getElementById('review-count').textContent =
+    `${reviewedCount} of ${totalReviewable} reviewed`;
+
+  const sorted = [...needsReview].sort((a, b) => {
+    const ad = a.discrepancy_type ? 0 : 1;
+    const bd = b.discrepancy_type ? 0 : 1;
+    if (ad !== bd) return ad - bd;
+    return a.confidence - b.confidence;
+  });
+
+  const list = document.getElementById('review-list');
+  if (!sorted.length) {
+    list.innerHTML = '<p class="review-empty">All items reviewed ✓</p>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(c => {
+    const badgeClass = c.discrepancy_type === 'in_inventory_not_detected' ? 'badge-grey'
+      : c.discrepancy_type ? 'badge-red' : 'badge-yellow';
+    const badgeLabel = c.discrepancy_type === 'in_inventory_not_detected' ? 'Missing'
+      : c.discrepancy_type ? 'Discrepancy' : 'Low confidence';
+
+    const thumb = c.sighting_count > 0
+      ? `<img src="/frame/${c.cluster_id}" class="review-thumb"
+             onerror="this.style.display='none'" />`
+      : '<div class="review-thumb-missing">Inventory-only — no frame</div>';
+
+    return `
+      <div class="review-item" id="ri-${c.cluster_id}" data-id="${c.cluster_id}">
+        <div class="review-item-header">
+          <span class="review-class">${c.sign_class}</span>
+          <span class="badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        ${thumb}
+        <div class="review-meta">
+          <span>Conf: ${(c.confidence * 100).toFixed(0)}%</span>
+          <span>Sightings: ${c.sighting_count}</span>
+        </div>
+        ${c.review_reason
+          ? `<div class="review-reason">${c.review_reason}</div>`
+          : ''}
+        <div style="text-align:right;margin-top:5px">
+          <button class="review-btn" onclick="event.stopPropagation(); markReviewed(${c.cluster_id})">
+            Mark Reviewed
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Click → jump to marker
+  list.querySelectorAll('.review-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = parseInt(el.dataset.id);
+      const m = markerMap[id];
+      if (m) { map.setView(m.getLatLng(), 17); m.openPopup(); }
+    });
+  });
+}
+
+function highlightReviewItem(clusterId) {
+  document.querySelectorAll('.review-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`ri-${clusterId}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
+// =========================================================================
+// Mark reviewed (called from popup button or review-queue button)
+// =========================================================================
+window.markReviewed = async function(clusterId) {
+  const res = await fetch(`/api/mark-reviewed/${clusterId}`, { method: 'POST' });
+  if (!res.ok) return;
+
+  const c = clusters.find(c => c.cluster_id === clusterId);
+  if (!c) return;
+  c.needs_review = false;
+  c.review_reason = null;
+
+  const m = markerMap[clusterId];
+  if (m) {
+    m.setStyle({ color: '#38a169', fillColor: '#38a169' });
+    m.setPopupContent(popupHtml(c));
+  }
+  renderReviewQueue();
+};
+
+// =========================================================================
+// Progress log helper
+// =========================================================================
+function appendLog(msg, isError = false) {
+  const p = document.createElement('p');
+  if (isError) p.className = 'err';
+  p.textContent = msg;
+  const box = document.getElementById('log-box');
+  box.appendChild(p);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+// =========================================================================
+// Run processing
+// =========================================================================
+document.getElementById('run-btn').addEventListener('click', async () => {
+  const modelFile     = document.getElementById('model-file').files[0];
+  const videoFile     = document.getElementById('video-file').files[0];
+  const sidecarFile   = document.getElementById('sidecar-file').files[0];
+  const inventoryFile = document.getElementById('inventory-file').files[0];
+
+  if (!modelFile || !videoFile || !sidecarFile) {
+    alert('Please select a YOLO checkpoint, video, and GPS sidecar file.');
+    return;
+  }
+
+  const runBtn    = document.getElementById('run-btn');
+  const exportBtn = document.getElementById('export-btn');
+
+  runBtn.disabled = true;
+  runBtn.textContent = 'Uploading files…';
+  exportBtn.disabled = true;
+
+  document.getElementById('progress-section').style.display = '';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('progress-bar').className = '';
+  setProgress(5);
+  appendLog('Uploading files to server…');
+
+  const fd = new FormData();
+  fd.append('model',    modelFile);
+  fd.append('video',    videoFile);
+  fd.append('sidecar',  sidecarFile);
+  if (inventoryFile) fd.append('inventory', inventoryFile);
+  fd.append('conf_threshold', document.getElementById('conf-slider').value);
+  fd.append('match_radius',   document.getElementById('radius-slider').value);
+
+  let uploadRes;
+  try {
+    uploadRes = await fetch('/api/process', { method: 'POST', body: fd });
+  } catch (e) {
+    appendLog('Upload failed: ' + e.message, true);
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run Processing';
+    return;
+  }
+
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json().catch(() => ({ error: uploadRes.statusText }));
+    appendLog('Error: ' + (err.error || 'Unknown error'), true);
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run Processing';
+    return;
+  }
+
+  runBtn.textContent = 'Processing…';
+  setProgress(15);
+  appendLog('Files uploaded — processing started…');
+
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/stream');
+
+  let barPct = 15;
+
+  eventSource.onmessage = async (e) => {
+    const evt = JSON.parse(e.data);
+
+    if (evt.type === 'ping') return;
+
+    if (evt.type === 'log') {
+      appendLog(evt.message);
+      barPct = Math.min(barPct + 2, 88);
+      setProgress(barPct);
+    }
+
+    if (evt.type === 'complete') {
+      setProgress(100);
+      appendLog(`Done — ${evt.count} sign clusters detected.`);
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run Processing';
+      exportBtn.disabled = false;
+      eventSource.close();
+
+      const r = await fetch('/api/results');
+      const data = await r.json();
+      clusters = data.clusters;
+      renderMarkers();
+      renderReviewQueue();
+    }
+
+    if (evt.type === 'error') {
+      document.getElementById('progress-bar').className = 'error';
+      appendLog('ERROR: ' + evt.message, true);
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run Processing';
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = (e) => {
+    if (eventSource.readyState === EventSource.CLOSED) return;
+    appendLog('Connection to server interrupted.', true);
+  };
+});
+
+// =========================================================================
+// Export
+// =========================================================================
+document.getElementById('export-btn').addEventListener('click', () => {
+  window.location.href = '/api/export';
+});
+</script>
+</body>
+</html>
