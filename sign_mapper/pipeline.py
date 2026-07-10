@@ -32,7 +32,7 @@ MIN_CONF_DEFAULT = 0.5
 
 def run_pipeline(model_path, video_path, sidecar_path, output_dir,
                  conf_threshold=MIN_CONF_DEFAULT, progress=None,
-                 annotations_dir=None):
+                 annotations_dir=None, extract_fps=EXTRACT_FPS):
     """
     Returns list of cluster dicts.  progress(str) receives status messages.
     If annotations_dir is provided, also writes qa_report.json to output_dir.
@@ -55,7 +55,8 @@ def run_pipeline(model_path, video_path, sidecar_path, output_dir,
     progress("Extracting frames and running inference...")
     detections = _run_inference(model, class_names, Path(video_path),
                                 fixes, conf_threshold, output_dir, progress,
-                                save_frames=annotations_dir is not None)
+                                save_frames=annotations_dir is not None,
+                                extract_fps=extract_fps)
     progress(f"Inference complete: {len(detections)} detections")
 
     if not detections:
@@ -79,7 +80,7 @@ def run_pipeline(model_path, video_path, sidecar_path, output_dir,
 
 
 def _run_inference(model, class_names, video_path, fixes, conf_threshold,
-                   output_dir, progress, save_frames=False):
+                   output_dir, progress, save_frames=False, extract_fps=EXTRACT_FPS):
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open video: {video_path}")
@@ -87,7 +88,7 @@ def _run_inference(model, class_names, video_path, fixes, conf_threshold,
     raw_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
     duration_ms = (total_frames / raw_fps) * 1000 if total_frames and raw_fps else 0
-    interval_ms = 1000.0 / EXTRACT_FPS
+    interval_ms = 1000.0 / extract_fps
 
     detections = []
     ts_ms = 0.0

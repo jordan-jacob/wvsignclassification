@@ -25,7 +25,56 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+  transition: margin-left 0.2s ease;
 }
+#left-panel.collapsed { margin-left: -280px; }
+
+#sidebar-collapse {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: #4a5568;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+#sidebar-collapse:hover { background: #edf2f7; }
+
+#sidebar-expand {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 70px;
+  z-index: 1200;
+  width: 20px;
+  height: 40px;
+  border: 1px solid #e2e8f0;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+  background: #fff;
+  color: #4a5568;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 1px 1px 4px rgba(0,0,0,.12);
+}
+#sidebar-expand.show { display: block; }
+#sidebar-expand:hover { background: #edf2f7; }
+
+/* Slider hint + inline toggle (left sidebar) */
+.slider-hint { font-size: 10px; color: #a0aec0; line-height: 1.4; margin-top: 3px; }
+.toggle-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: #4a5568;
+  text-transform: none; letter-spacing: 0;
+  cursor: pointer;
+}
+.toggle-note { font-size: 10px; color: #a0aec0; margin-top: 2px; }
 
 #left-panel h2 {
   font-size: 15px;
@@ -343,8 +392,23 @@ input[type="range"] {
 
 /* "About this data" info panel */
 .about-data-panel {
+  position: relative;
   background: rgba(255,255,255,.95); padding: 8px 10px; border-radius: 6px;
   box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: 11px; color: #4a5568;
   max-width: 260px; line-height: 1.45;
 }
 .about-data-panel strong { color: #2d3748; }
+.about-close {
+  position: absolute; top: 4px; right: 5px;
+  border: none; background: none; cursor: pointer;
+  font-size: 12px; line-height: 1; color: #a0aec0; padding: 2px;
+}
+.about-close:hover { color: #4a5568; }
+
+/* ⓘ control that re-shows the About panel */
+.about-info-btn a {
+  display: block; width: 26px; height: 26px; line-height: 26px;
+  text-align: center; font-size: 15px; color: #4a5568;
+  text-decoration: none; background: #fff; cursor: pointer;
+}
+.about-info-btn a:hover { background: #f7fafc; }

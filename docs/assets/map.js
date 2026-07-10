@@ -10,9 +10,7 @@ const ROUTE_LABEL = 'Wirt County, WV — Municipal route (Oct 2025)';
 function markerColor(props) {
   const dec = SignGrader.decisionColor(props.cluster_id);   // grader decision wins
   if (dec) return dec;
-  if (props.discrepancy_type === 'in_inventory_not_detected') return '#718096';
-  if (props.discrepancy_type)                                 return '#e53e3e';
-  if (!props.needs_review)                                    return '#38a169';
+  if (!props.needs_review) return '#38a169';
   return '#d69e2e';
 }
 
@@ -44,11 +42,8 @@ function popupHtml(props, lat, lon) {
     ['Sightings',    props.sighting_count != null ? props.sighting_count : '—'],
     ['Needs review', props.needs_review ? '⚠ Yes' : '✓ No'],
   ];
-  if (props.review_reason)         rows.push(['Reason',       `<em>${props.review_reason}</em>`]);
-  if (props.discrepancy_type)      rows.push(['Discrepancy',  props.discrepancy_type]);
-  if (props.inventory_distance_m != null) rows.push(['Inv. dist.', props.inventory_distance_m + ' m']);
-  if (props.inventory_source)      rows.push(['Inv. source',  props.inventory_source]);
-  if (props.video_source)          rows.push(['Source',       props.video_source]);
+  if (props.review_reason) rows.push(['Reason', `<em>${props.review_reason}</em>`]);
+  if (props.video_source)  rows.push(['Source', props.video_source]);
 
   const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   return `<div class="grader-popup" style="min-width:210px">
@@ -82,7 +77,8 @@ infoControl.onAdd = function () {
 infoControl.update = function (count) {
   this._div.innerHTML =
     `<strong>${count} sign detections</strong> from ${ROUTE_LABEL}.<br>` +
-    `Powered by YOLOv8m trained on WVDOH dashcam footage.`;
+    `Powered by YOLOv8m trained on WVDOH dashcam footage.<br>` +
+    `<span class="info-note">Inventory comparison available in the local app.</span>`;
 };
 infoControl.addTo(map);
 
@@ -168,7 +164,6 @@ function refreshOpenPopup() {
 function updateStats(features) {
   const total = features.length;
   const needsReview = features.filter(f => f.properties && f.properties.needs_review).length;
-  const discrepancies = features.filter(f => f.properties && f.properties.discrepancy_type).length;
   const classCounts = {};
   features.forEach(f => {
     const cls = SignGrader.collapseClass((f.properties && f.properties.sign_class) || 'Unknown');
@@ -178,7 +173,6 @@ function updateStats(features) {
 
   document.getElementById('stat-total').textContent     = total;
   document.getElementById('stat-review').textContent    = needsReview;
-  document.getElementById('stat-disc').textContent      = discrepancies;
   document.getElementById('stat-top').textContent       = topClass ? `${topClass[0]} (${topClass[1]})` : '—';
   document.getElementById('stats-panel').style.display  = '';
 }
@@ -189,10 +183,7 @@ let tallyDiv = null;
 function updateTally() {
   if (!tallyDiv) return;
   const t = SignGrader.tally();
-  const total = allFeatures.filter(f => {
-    const p = f.properties || {};
-    return (p.sighting_count || 0) > 0 || p.discrepancy_type;
-  }).length;
+  const total = allFeatures.filter(f => ((f.properties || {}).sighting_count || 0) > 0).length;
   tallyDiv.innerHTML =
     `<strong>Reviewed: ${t.reviewed} / ${total}</strong>` +
     `<div class="tally-sub">${t.approved} approved · ${t.wrong} wrong · ${t.unclear} unclear · ${t.no_sign} false pos.</div>`;
@@ -213,14 +204,7 @@ function updateTally() {
   panel.onAdd = function () {
     const div = L.DomUtil.create('div', 'grader-tally grader-controls');
     L.DomEvent.disableClickPropagation(div);
-    const on = SignGrader.thumbnailsOn();
     div.innerHTML = `
-      <label class="grader-toggle">
-        <input type="checkbox" id="thumb-toggle" ${on ? 'checked' : ''}/> Show detection thumbnails (local app only)
-      </label>
-      <div class="grader-toggle-note" id="thumb-note" style="${on ? 'display:none' : ''}">
-        Thumbnails require the local app (sign_mapper/) to be running.
-      </div>
       <div class="grader-io-row">
         <button id="export-reviews">Export Reviews</button>
         <button id="import-reviews">Import Reviews</button>
@@ -234,24 +218,11 @@ function updateTally() {
   };
   panel.addTo(map);
 
-  // About-this-data panel (bottom-right) — honest note on inventory coverage.
-  const about = L.control({ position: 'bottomright' });
-  about.onAdd = function () {
-    const div = L.DomUtil.create('div', 'about-data-panel');
-    L.DomEvent.disableClickPropagation(div);
-    div.innerHTML =
-      `<strong>About this data</strong><br>` +
-      `Sign inventory provided by WVDOH open-access GIS data (July 2026). ` +
-      `Warning signs are not included in the current inventory snapshot — comparison ` +
-      `for the Warning class is one-directional (detections only). ` +
-      `Full sign feature class pending from WVDOH.`;
-    return div;
-  };
-  about.addTo(map);
-
-  document.getElementById('thumb-toggle').addEventListener('change', function () {
+  // Thumbnail toggle now lives in the left sidebar (Item 1b).
+  const thumbToggle = document.getElementById('thumb-toggle');
+  thumbToggle.checked = SignGrader.thumbnailsOn();
+  thumbToggle.addEventListener('change', function () {
     SignGrader.toggleThumbnails(this.checked);
-    document.getElementById('thumb-note').style.display = this.checked ? 'none' : '';
     refreshOpenPopup();
   });
   document.getElementById('export-reviews').addEventListener('click', () => {
@@ -330,10 +301,43 @@ document.addEventListener('keydown', e => {
   } else if (key === 't') {
     const state = SignGrader.toggleThumbnails();
     const cb = document.getElementById('thumb-toggle'); if (cb) cb.checked = state;
-    const note = document.getElementById('thumb-note'); if (note) note.style.display = state ? 'none' : '';
     refreshOpenPopup();
   }
 });
+
+// ── FPS slider label (demo-only — no effect on pre-processed data) ───────────
+const fpsSlider = document.getElementById('fps-slider');
+if (fpsSlider) {
+  fpsSlider.addEventListener('input', function () {
+    document.getElementById('fps-val').textContent = parseFloat(this.value);
+  });
+}
+
+// ── Collapsible sidebar (Item 1c) ────────────────────────────────────────────
+(function () {
+  const sidebar = document.getElementById('map-sidebar');
+  const expand  = document.getElementById('sidebar-expand');
+  function setCollapsed(collapsed) {
+    sidebar.classList.toggle('collapsed', collapsed);
+    expand.classList.toggle('show', collapsed);
+    sessionStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+    setTimeout(() => map.invalidateSize(), 220);
+  }
+  document.getElementById('sidebar-collapse').addEventListener('click', () => setCollapsed(true));
+  expand.addEventListener('click', () => setCollapsed(false));
+  setCollapsed(sessionStorage.getItem('sidebarCollapsed') === '1');
+})();
+
+// ── Demo banner dismiss (Item 2a) ────────────────────────────────────────────
+(function () {
+  const banner = document.getElementById('demo-banner');
+  if (!banner) return;
+  if (sessionStorage.getItem('demoBannerDismissed') === '1') banner.style.display = 'none';
+  document.getElementById('demo-banner-close').addEventListener('click', () => {
+    banner.style.display = 'none';
+    sessionStorage.setItem('demoBannerDismissed', '1');
+  });
+})();
 
 // ── Load demo data ─────────────────────────────────────────────────────────
 fetch(DEMO_GEOJSON)

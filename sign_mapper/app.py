@@ -82,6 +82,7 @@ def start_processing():
 
     conf_threshold = float(request.form.get('conf_threshold', 0.5))
     match_radius = float(request.form.get('match_radius', 25.0))
+    extract_fps = float(request.form.get('fps', 2.0))
 
     upload_dir = OUTPUTS_DIR / 'uploads'
     if upload_dir.exists():
@@ -131,6 +132,7 @@ def start_processing():
                 output_dir=OUTPUTS_DIR,
                 conf_threshold=conf_threshold,
                 progress=_emit,
+                extract_fps=extract_fps,
             )
 
             inv = None
