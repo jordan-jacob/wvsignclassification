@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WV Sign Detection — Downloads</title>
+<title>WV Roadway Sign Detection — Downloads</title>
 <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
 
 <nav>
-  <a class="nav-brand" href="index.html">WV Sign Detection</a>
+  <a class="nav-brand" href="index.html">WV Roadway Sign Detection</a>
   <div class="nav-links">
     <a href="index.html">Map</a>
     <a href="downloads.html" class="active">Downloads</a>
@@ -166,6 +166,13 @@ python app.py
 # open http://localhost:5000</pre>
       </div>
       <p class="card-desc" style="margin-top:12px">
+        <strong>One-time setup size:</strong> the app itself is small, but installing
+        <code>ultralytics</code> pulls in <code>torch</code> (~2&nbsp;GB with CUDA, ~500&nbsp;MB CPU-only).
+        This is expected and unavoidable for ML inference — a one-time download, not
+        the app's own size. The Flask app uses <code>opencv-python-headless</code>
+        (no GUI libraries) to keep the rest of the footprint minimal.
+      </p>
+      <p class="card-desc" style="margin-top:12px">
         <strong>GPS sidecar requirement:</strong> most action cameras (DJI, GoPro, Rexing)
         embed GPS as subtitle tracks in <code>.srt</code> format alongside the video.
         Check your camera's export settings. A <code>.csv</code> with <code>timestamp,lat,lon</code>
@@ -204,7 +211,9 @@ python app.py
           the WV Division of Highways (WVDOH).
         </p>
         <dl class="card-meta" style="margin-top:8px">
-          <dt>Research lab</dt><dd>WVU Lane Department of Computer Science &amp; Electrical Engineering</dd>
+          <dt>Department</dt><dd>Department of Civil and Environmental Engineering,
+                                 West Virginia University, Morgantown, WV 26506</dd>
+          <dt>Project contact</dt><dd>TBD</dd>
           <dt>Sponsor</dt>    <dd>WV Division of Highways (WVDOH)</dd>
           <dt>GitHub</dt>    <dd><a href="https://github.com/jordan-jacob/wvsignclassification"
                                     style="color:#3182ce">jordan-jacob/wvsignclassification</a></dd>

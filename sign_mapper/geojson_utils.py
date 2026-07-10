@@ -42,6 +42,19 @@ from pathlib import Path
 # For now: suppress "in_inventory_not_detected" for Warnings only.
 INVENTORY_CLASSES_MISSING = {"Warnings"}
 
+# Output-layer merge of Regulatory + Informational (Item 1): the model and WVDOH
+# tag these inconsistently, so they are collapsed to one label at export /
+# comparison time only. This does NOT change CLASS_REMAP or the trained model.
+COLLAPSE_CLASSES = {
+    "Regulatory": "Informational/Regulatory",
+    "Informational": "Informational/Regulatory",
+}
+
+
+def collapse_class(name: str) -> str:
+    """Merge Regulatory/Informational into one display label; pass others through."""
+    return COLLAPSE_CLASSES.get(name, name)
+
 # MUTCDCAT (WVDOH category field) -> model 9-class taxonomy — the coarse
 # fallback, used when no MUTCDCODE prefix rule matches below.
 WVDOH_FIELD_MAP = {
@@ -135,6 +148,8 @@ def save_geojson(clusters: list, path, video_source=None):
             continue
         # Keep cluster_id in properties — the map keys markers / grader reviews by it.
         props = {k: v for k, v in c.items() if k not in ('lat_median', 'lon_median')}
+        if 'sign_class' in props:
+            props['sign_class'] = collapse_class(props['sign_class'])   # Item 1
         if video_source and 'video_source' not in props:
             props['video_source'] = video_source
         features.append({
@@ -192,6 +207,12 @@ def compare_with_inventory(clusters: list, inventory: dict, match_radius_m=25.0,
     all_features = inventory.get('features', [])
     corridor = _route_corridor(clusters, corridor_buffer_m)
 
+    # Collapse detected classes before comparison so a Regulatory detection and an
+    # Informational inventory sign (or vice-versa) don't register as a mismatch (Item 1).
+    for c in clusters:
+        if c.get('sign_class'):
+            c['sign_class'] = collapse_class(c['sign_class'])
+
     # Real detection points (used for the "missing" nearest-detection test below).
     det_pts = [(c['lat_median'], c['lon_median']) for c in clusters
                if c.get('lat_median') is not None and c.get('lon_median') is not None]
@@ -228,7 +249,7 @@ def compare_with_inventory(clusters: list, inventory: dict, match_radius_m=25.0,
             cluster['inventory_distance_m'] = round(best_dist, 2)
             cluster['inventory_source'] = props.get('inventory_source')
 
-            inv_class = _inv_class(props)
+            inv_class = collapse_class(_inv_class(props))
             cluster['inventory_class'] = inv_class
             if inv_class and inv_class != cluster['sign_class']:
                 cluster['discrepancy_type'] = 'class_mismatch'
@@ -251,7 +272,7 @@ def compare_with_inventory(clusters: list, inventory: dict, match_radius_m=25.0,
         if i in inv_matched:
             continue
         props = feat.get('properties') or {}
-        inv_class = _inv_class(props)
+        inv_class = collapse_class(_inv_class(props))
         # WVDOH open-access inventory has no comprehensive Warning feature class,
         # so don't flag "Warning in inventory not detected" (one-directional only).
         if inv_class in INVENTORY_CLASSES_MISSING:

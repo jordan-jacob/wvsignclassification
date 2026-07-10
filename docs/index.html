@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WV Sign Detection — Map</title>
+<title>WV Roadway Sign Detection — Map</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="assets/style.css" />
 <style>
@@ -18,7 +18,7 @@
 <body>
 
 <nav>
-  <a class="nav-brand" href="index.html">WV Sign Detection</a>
+  <a class="nav-brand" href="index.html">WV Roadway Sign Detection</a>
   <div class="nav-links">
     <a href="index.html" class="active">Map</a>
     <a href="downloads.html">Downloads</a>
@@ -51,9 +51,8 @@
             <tr class="overall-row"><td>Overall</td><td>0.814</td><td>0.796</td><td>0.818</td><td>0.598</td></tr>
             <tr><td>Curves</td><td>0.751</td><td>0.722</td><td>0.787</td><td>0.577</td></tr>
             <tr><td>HighwaySymbols</td><td>0.886</td><td>0.749</td><td>0.835</td><td>0.600</td></tr>
-            <tr><td>Informational</td><td>0.733</td><td>0.766</td><td>0.784</td><td>0.538</td></tr>
+            <tr><td>Informational/Regulatory *</td><td>0.724</td><td>0.686</td><td>0.711</td><td>0.461</td></tr>
             <tr><td>MileMarkers</td><td>0.919</td><td>0.867</td><td>0.858</td><td>0.547</td></tr>
-            <tr><td>Regulatory</td><td>0.714</td><td>0.606</td><td>0.637</td><td>0.384</td></tr>
             <tr><td>SpeedLimits</td><td>0.856</td><td>0.877</td><td>0.895</td><td>0.796</td></tr>
             <tr><td>StopSigns</td><td>0.963</td><td>0.984</td><td class="best">0.992</td><td>0.896</td></tr>
             <tr><td>TrafficLights</td><td>0.723</td><td>0.849</td><td>0.815</td><td>0.496</td></tr>
@@ -62,6 +61,10 @@
         </table>
         <p style="font-size:10px;color:#a0aec0;margin-top:4px">
           YOLOv8m · 8,156 train / 1,924 val frames · 9 WVDOH GIS categories
+        </p>
+        <p style="font-size:10px;color:#a0aec0;margin-top:2px">
+          * Informational and Regulatory are merged to one label in the map output;
+          the model trains them separately — values shown are the mean of the two.
         </p>
       </div>
 

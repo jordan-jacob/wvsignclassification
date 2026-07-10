@@ -8,3 +8,7 @@ runs/
 logs/
 sign_mapper/build/
 sign_mapper/dist/
+# Ephemeral runtime artifacts — generated per run, never commit
+sign_mapper/outputs/
+__pycache__/
+*.pyc

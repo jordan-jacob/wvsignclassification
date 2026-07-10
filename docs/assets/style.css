@@ -675,9 +675,29 @@ pre {
   transition: background .12s, color .12s, border-color .12s;
 }
 .grader-btn:hover { background: #edf2f7; }
-.grader-btn[data-decision="correct"].sel    { background: #38a169; border-color: #38a169; color: #fff; }
+.grader-btn[data-decision="approved"].sel    { background: #38a169; border-color: #38a169; color: #fff; }
 .grader-btn[data-decision="wrong_class"].sel { background: #e53e3e; border-color: #e53e3e; color: #fff; }
 .grader-btn[data-decision="unclear"].sel     { background: #805ad5; border-color: #805ad5; color: #fff; }
+
+/* Wrong-class correction dropdown (Item 4) + No-Sign option (Item 5) */
+.grader-class-dropdown { display: none; margin: 4px 0 2px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 4px; background: #f7fafc; }
+.grader-class-dropdown.open { display: block; }
+.grader-dropdown-label { font-size: 11px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+.grader-class-opt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #2d3748; padding: 2px 0; cursor: pointer; }
+.grader-class-opt.disabled { color: #a0aec0; cursor: not-allowed; }
+.grader-class-opt.no-sign-opt { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #cbd5e0; color: #718096; }
+
+/* YOLO bbox thumbnail toggle (Item 8) */
+.grader-thumb-wrap { position: relative; }
+.grader-thumb-toggle {
+  position: absolute; top: 6px; right: 6px; padding: 2px 6px; font-size: 10px; cursor: pointer;
+  border: none; border-radius: 3px; background: rgba(26,32,44,.75); color: #fff;
+}
+.grader-thumb-toggle:hover { background: rgba(26,32,44,.9); }
+
+/* Keyboard shortcut hint */
+.grader-help { font-size: 10px; color: #718096; line-height: 1.5; }
+.grader-help b { color: #4a5568; }
 .grader-note-row { display: flex; gap: 4px; margin-top: 6px; }
 .grader-note {
   flex: 1; min-width: 0; padding: 4px 6px; font-size: 11px;

@@ -20,6 +20,16 @@ function markerRadius(props) {
   return Math.min(7 + (props.sighting_count || 1) * 1.2, 18);
 }
 
+// no_sign (false positive) markers get a dashed outline to distinguish them
+// from the solid-grey "in inventory, not detected" markers.
+function styleFor(props) {
+  const col = markerColor(props);
+  return {
+    color: col, fillColor: col,
+    dashArray: SignGrader.decisionOf(props.cluster_id) === 'no_sign' ? '4 3' : null,
+  };
+}
+
 function graderMeta(props, lat, lon) {
   return {
     sign_class: props.sign_class, lat, lon,
@@ -42,7 +52,7 @@ function popupHtml(props, lat, lon) {
 
   const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   return `<div class="grader-popup" style="min-width:210px">
-    <strong style="font-size:13px">${props.sign_class || 'Unknown'}</strong>
+    <strong style="font-size:13px">${SignGrader.collapseClass(props.sign_class) || 'Unknown'}</strong>
     <table style="width:100%;border-collapse:collapse;margin-top:5px;font-size:11px">
       ${tableRows}
     </table>
@@ -95,13 +105,12 @@ function renderFeatures(fc) {
 
     const m = L.circleMarker([lat, lon], {
       radius: markerRadius(props),
-      color: markerColor(props),
-      fillColor: markerColor(props),
+      ...styleFor(props),
       fillOpacity: 0.75,
       weight: 2,
     });
     m.bindPopup(popupHtml(props, lat, lon), { maxWidth: 340 });
-    m.on('popupopen', (e) => wireMarkerPopup(e.popup, m, props, lat, lon));
+    m.on('popupopen', (e) => wireMarkerPopup(e.popup, m, props));
     m.on('popupclose', () => { if (currentPopup && currentPopup.id === props.cluster_id) currentPopup = null; });
     m.addTo(layerGroup);
     markerMap[props.cluster_id] = { marker: m, props, lat, lon };
@@ -119,17 +128,14 @@ function renderFeatures(fc) {
 // ── Grader popup wiring ──────────────────────────────────────────────────────
 function refreshMarker(props) {
   const entry = markerMap[props.cluster_id];
-  if (entry) entry.marker.setStyle({ color: markerColor(props), fillColor: markerColor(props) });
+  if (entry) entry.marker.setStyle(styleFor(props));
   updateTally();
 }
 
-function wireMarkerPopup(popup, marker, props, lat, lon) {
+// Popup button/keyboard handling is delegated once (see wireDelegation call
+// below); here we only track which popup is open.
+function wireMarkerPopup(popup, marker, props) {
   currentPopup = { id: props.cluster_id, marker };
-  const root = popup.getElement();
-  if (!root) return;
-  SignGrader.attachHandlers(root, props.cluster_id, graderMeta(props, lat, lon),
-    () => refreshMarker(props),
-    () => { marker.closePopup(); advanceToNextReview(props, lat, lon); });
 }
 
 function advanceToNextReview(fromProps, fromLat, fromLon) {
@@ -165,7 +171,7 @@ function updateStats(features) {
   const discrepancies = features.filter(f => f.properties && f.properties.discrepancy_type).length;
   const classCounts = {};
   features.forEach(f => {
-    const cls = (f.properties && f.properties.sign_class) || 'Unknown';
+    const cls = SignGrader.collapseClass((f.properties && f.properties.sign_class) || 'Unknown');
     classCounts[cls] = (classCounts[cls] || 0) + 1;
   });
   const topClass = Object.entries(classCounts).sort((a, b) => b[1] - a[1])[0];
@@ -189,7 +195,7 @@ function updateTally() {
   }).length;
   tallyDiv.innerHTML =
     `<strong>Reviewed: ${t.reviewed} / ${total}</strong>` +
-    `<div class="tally-sub">${t.correct} correct · ${t.wrong} wrong · ${t.unclear} unclear</div>`;
+    `<div class="tally-sub">${t.approved} approved · ${t.wrong} wrong · ${t.unclear} unclear · ${t.no_sign} false pos.</div>`;
 }
 
 (function buildGraderControls() {
@@ -219,6 +225,10 @@ function updateTally() {
         <button id="export-reviews">Export Reviews</button>
         <button id="import-reviews">Import Reviews</button>
       </div>
+      <div class="grader-io-row">
+        <button id="export-geojson">Export Reviewed GeoJSON</button>
+      </div>
+      <div class="grader-help">Keys: <b>c</b> approve · <b>w</b> wrong class · <b>u</b> unclear · <b>Enter</b> save · <b>t</b> thumbnails</div>
       <input type="file" id="import-file" accept=".json" style="display:none"/>`;
     return div;
   };
@@ -247,6 +257,11 @@ function updateTally() {
   document.getElementById('export-reviews').addEventListener('click', () => {
     SignGrader.downloadJson(SignGrader.exportReviews(), 'reviews.json');
   });
+  // Reviewed GeoJSON: bakes in-session decisions into the loaded features and
+  // drops false positives (Item 6).
+  document.getElementById('export-geojson').addEventListener('click', () => {
+    SignGrader.downloadJson(SignGrader.buildReviewedGeoJson(allFeatures), SignGrader.reviewedFilename());
+  });
   const importFile = document.getElementById('import-file');
   document.getElementById('import-reviews').addEventListener('click', () => importFile.click());
   importFile.addEventListener('change', () => {
@@ -264,6 +279,23 @@ function updateTally() {
   });
 })();
 
+// One delegated click/change listener on the map container drives every popup's
+// grader buttons/dropdown (Leaflet popups are created lazily, so per-popup
+// listeners are fragile — Item 7).
+SignGrader.wireDelegation(
+  document.getElementById('map'),
+  (id) => { const e = markerMap[id]; return e ? graderMeta(e.props, e.lat, e.lon) : null; },
+  {
+    onChange: (id) => { const e = markerMap[id]; if (e) refreshMarker(e.props); },
+    onSave: (id) => {
+      const e = markerMap[id];
+      if (!e) return;
+      e.marker.closePopup();
+      advanceToNextReview(e.props, e.lat, e.lon);
+    },
+  },
+);
+
 // Keyboard shortcuts while a grader popup is open
 document.addEventListener('keydown', e => {
   if (!currentPopup) return;
@@ -274,24 +306,27 @@ document.addEventListener('keydown', e => {
   const entry = markerMap[currentPopup.id];
   if (!entry) return;
   const { props, lat, lon } = entry;
-  const decMap = { c: 'correct', w: 'wrong_class', u: 'unclear' };
+  const rootEl = entry.marker.getPopup().getElement();
+  const scope = rootEl && rootEl.querySelector('.grader-popup');
 
-  if (decMap[key]) {
-    SignGrader.decide(props.cluster_id, decMap[key], graderMeta(props, lat, lon));
-    const root = entry.marker.getPopup().getElement();
-    if (root) root.querySelectorAll('.grader-btn')
-      .forEach(b => b.classList.toggle('sel', b.dataset.decision === decMap[key]));
+  if (key === 'c' || key === 'u') {
+    SignGrader.decide(props.cluster_id, key === 'c' ? 'approved' : 'unclear', graderMeta(props, lat, lon));
+    SignGrader.refreshScope(scope, props.cluster_id);
     refreshMarker(props);
+  } else if (key === 'w') {
+    e.preventDefault();
+    SignGrader.openWrongClass(scope);   // arrow-key + Enter to pick a class
   } else if (key === 'enter') {
     e.preventDefault();
-    const root = entry.marker.getPopup().getElement();
-    const note = root && root.querySelector('.grader-note');
+    const note = scope && scope.querySelector('.grader-note');
     SignGrader.setNote(props.cluster_id, note ? note.value : '', graderMeta(props, lat, lon));
     refreshMarker(props);
     entry.marker.closePopup();
     advanceToNextReview(props, lat, lon);
   } else if (key === 'escape') {
-    entry.marker.closePopup();
+    const dd = scope && scope.querySelector('.grader-class-dropdown.open');
+    if (dd) SignGrader.closeDropdown(scope);
+    else entry.marker.closePopup();
   } else if (key === 't') {
     const state = SignGrader.toggleThumbnails();
     const cb = document.getElementById('thumb-toggle'); if (cb) cb.checked = state;

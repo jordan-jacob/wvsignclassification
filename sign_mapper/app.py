@@ -233,7 +233,16 @@ def results():
 
 @app.route('/frame/<int:cluster_id>')
 def serve_frame(cluster_id):
-    thumb = OUTPUTS_DIR / 'frames' / f'cluster_{cluster_id}.jpg'
+    thumb = OUTPUTS_DIR / 'frames' / f'cluster_{cluster_id}_clean.jpg'
+    if thumb.exists():
+        return send_file(str(thumb), mimetype='image/jpeg')
+    return '', 404
+
+
+@app.route('/frame/<int:cluster_id>/bbox')
+def serve_frame_bbox(cluster_id):
+    """Thumbnail with the YOLO detection box drawn (Item 8)."""
+    thumb = OUTPUTS_DIR / 'frames' / f'cluster_{cluster_id}_bbox.jpg'
     if thumb.exists():
         return send_file(str(thumb), mimetype='image/jpeg')
     return '', 404

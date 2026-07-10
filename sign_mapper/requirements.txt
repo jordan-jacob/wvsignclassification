@@ -1,9 +1,17 @@
-# Core deps (already present in the project venv)
-ultralytics
-opencv-python
-numpy
-scikit-learn
-flask
+# Minimal runtime deps for the Sign Mapper Flask app (inference + mapping only).
+# Deliberately smaller than the repo's top-level training requirements.txt —
+# install this one if you only want to run the local app.
+#
+# torch (~500 MB installed / ~2 GB with CUDA) is pulled in transitively by
+# ultralytics and is the main size driver. This is expected and unavoidable for
+# ML inference — a one-time setup cost, not the app itself.
 
-# scipy is available in the venv but not used by sign_mapper directly
-# geojson package is NOT needed — stdlib json is sufficient
+ultralytics>=8.0          # YOLO inference (pulls in torch + torchvision)
+flask>=3.0                # local web UI
+opencv-python-headless    # video/frame decode + thumbnail overlays; headless = no GUI
+                          # libs, ~30 MB smaller than the full opencv-python build
+numpy                     # array math
+scikit-learn              # DBSCAN spatial clustering (pipeline.py); pulls scipy transitively
+
+# Not needed by the app (kept out on purpose): shapely, fiona, pandas, matplotlib
+# (training/EDA only), and the `geojson` package (stdlib json is sufficient).

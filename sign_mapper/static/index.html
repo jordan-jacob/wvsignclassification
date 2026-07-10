@@ -96,6 +96,29 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 buildGraderControls();
 
+// One delegated click/change listener on the map container drives every popup's
+// grader buttons/dropdown (Leaflet popups are created lazily, so per-popup
+// listeners are fragile — Item 7).
+SignGrader.wireDelegation(
+  document.getElementById('map'),
+  (id) => { const c = clusters.find(x => String(x.cluster_id) === String(id)); return c ? graderMeta(c) : null; },
+  {
+    onChange: (id) => {
+      const c = clusters.find(x => String(x.cluster_id) === String(id));
+      if (!c) return;
+      refreshMarker(c);
+      if (c.needs_review) markReviewed(c.cluster_id);   // clear server-side flag
+    },
+    onSave: (id) => {
+      const c = clusters.find(x => String(x.cluster_id) === String(id));
+      if (!c) return;
+      const m = markerMap[c.cluster_id];
+      if (m) m.closePopup();
+      advanceToNextReview(c);
+    },
+  },
+);
+
 // =========================================================================
 // Slider wiring
 // =========================================================================
@@ -125,6 +148,16 @@ function markerRadius(c) {
   return Math.min(8 + (c.sighting_count || 1) * 1.5, 20);
 }
 
+// no_sign (false positive) markers get a dashed outline to distinguish them
+// from the solid-grey "in inventory, not detected" markers.
+function styleFor(c) {
+  const col = markerColor(c);
+  return {
+    color: col, fillColor: col,
+    dashArray: SignGrader.decisionOf(c.cluster_id) === 'no_sign' ? '4 3' : null,
+  };
+}
+
 function graderMeta(c) {
   return {
     sign_class: c.sign_class, lat: c.lat_median, lon: c.lon_median,
@@ -149,7 +182,7 @@ function popupHtml(c) {
   const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
 
   return `<div class="grader-popup" style="min-width:220px">
-    <strong style="font-size:13px">${c.sign_class}</strong>
+    <strong style="font-size:13px">${SignGrader.collapseClass(c.sign_class)}</strong>
     <table>${tableRows}</table>
     ${SignGrader.graderSectionHtml(c.cluster_id, graderMeta(c))}
   </div>`;
@@ -172,8 +205,7 @@ function renderMarkers() {
 
     const marker = L.circleMarker(ll, {
       radius: markerRadius(c),
-      color: markerColor(c),
-      fillColor: markerColor(c),
+      ...styleFor(c),
       fillOpacity: 0.75,
       weight: 2,
     });
@@ -197,24 +229,14 @@ function renderMarkers() {
 // =========================================================================
 function refreshMarker(c) {
   const m = markerMap[c.cluster_id];
-  if (m) m.setStyle({ color: markerColor(c), fillColor: markerColor(c) });
+  if (m) m.setStyle(styleFor(c));
   updateTally();
 }
 
+// Popup button/keyboard handling is delegated once (see wireDelegation call
+// below); here we only track which popup is open.
 function wireMarkerPopup(popup, marker, c) {
   currentPopup = { id: c.cluster_id, marker };
-  const root = popup.getElement();
-  if (!root) return;
-  SignGrader.attachHandlers(root, c.cluster_id, graderMeta(c),
-    () => {                       // onChange: recolor + tally
-      refreshMarker(c);
-      // A decision also clears the server-side needs_review flag / queue item.
-      if (c.needs_review) markReviewed(c.cluster_id);
-    },
-    () => {                       // onSave: advance to next needs-review marker
-      marker.closePopup();
-      advanceToNextReview(c);
-    });
 }
 
 // Open the popup for the nearest unreviewed marker with needs_review: true.
@@ -276,7 +298,7 @@ function renderReviewQueue() {
     return `
       <div class="review-item" id="ri-${c.cluster_id}" data-id="${c.cluster_id}">
         <div class="review-item-header">
-          <span class="review-class">${c.sign_class}</span>
+          <span class="review-class">${SignGrader.collapseClass(c.sign_class)}</span>
           <span class="badge ${badgeClass}">${badgeLabel}</span>
         </div>
         ${thumb}
@@ -325,7 +347,7 @@ window.markReviewed = async function(clusterId) {
 
   const m = markerMap[clusterId];
   if (m) {
-    m.setStyle({ color: markerColor(c), fillColor: markerColor(c) });
+    m.setStyle(styleFor(c));
     // Don't rebuild the popup while it's open — it would drop the wired grader
     // handlers the reviewer is interacting with.
     if (!(currentPopup && currentPopup.id === clusterId)) m.setPopupContent(popupHtml(c));
@@ -347,7 +369,7 @@ function updateTally() {
   const total = clusters.filter(c => c.sighting_count > 0 || c.discrepancy_type).length;
   tallyDiv.innerHTML =
     `<strong>Reviewed: ${t.reviewed} / ${total}</strong>` +
-    `<div class="tally-sub">${t.correct} correct · ${t.wrong} wrong · ${t.unclear} unclear</div>`;
+    `<div class="tally-sub">${t.approved} approved · ${t.wrong} wrong · ${t.unclear} unclear · ${t.no_sign} false pos.</div>`;
 }
 
 function refreshOpenPopup() {
@@ -387,6 +409,10 @@ function buildGraderControls() {
         <button id="export-reviews">Export Reviews</button>
         <button id="import-reviews">Import Reviews</button>
       </div>
+      <div class="grader-io-row">
+        <button id="export-geojson">Export Reviewed GeoJSON</button>
+      </div>
+      <div class="grader-help">Keys: <b>c</b> approve · <b>w</b> wrong class · <b>u</b> unclear · <b>Enter</b> save · <b>t</b> thumbnails</div>
       <input type="file" id="import-file" accept=".json" style="display:none"/>`;
     return div;
   };
@@ -415,6 +441,20 @@ function buildGraderControls() {
     SignGrader.setVideoSource(currentVideoSource());
     SignGrader.downloadJson(SignGrader.exportReviews(), 'reviews.json');
   });
+  // Reviewed GeoJSON: bakes in-session decisions into feature properties and
+  // drops false positives (Item 6).
+  document.getElementById('export-geojson').addEventListener('click', () => {
+    SignGrader.setVideoSource(currentVideoSource());
+    const features = clusters
+      .filter(c => c.lat_median != null && c.lon_median != null)
+      .map(c => {
+        const { lat_median, lon_median, ...props } = c;
+        return { type: 'Feature',
+                 geometry: { type: 'Point', coordinates: [lon_median, lat_median] },
+                 properties: props };
+      });
+    SignGrader.downloadJson(SignGrader.buildReviewedGeoJson(features), SignGrader.reviewedFilename());
+  });
   const importFile = document.getElementById('import-file');
   document.getElementById('import-reviews').addEventListener('click', () => importFile.click());
   importFile.addEventListener('change', () => {
@@ -441,25 +481,29 @@ document.addEventListener('keydown', e => {
 
   const c = clusters.find(x => x.cluster_id === currentPopup.id);
   if (!c) return;
-  const decMap = { c: 'correct', w: 'wrong_class', u: 'unclear' };
+  const rootEl = currentPopup.marker.getPopup().getElement();
+  const scope = rootEl && rootEl.querySelector('.grader-popup');
 
-  if (decMap[key]) {
-    SignGrader.decide(c.cluster_id, decMap[key], graderMeta(c));
-    const root = currentPopup.marker.getPopup().getElement();
-    if (root) root.querySelectorAll('.grader-btn')
-      .forEach(b => b.classList.toggle('sel', b.dataset.decision === decMap[key]));
+  if (key === 'c' || key === 'u') {
+    SignGrader.decide(c.cluster_id, key === 'c' ? 'approved' : 'unclear', graderMeta(c));
+    SignGrader.refreshScope(scope, c.cluster_id);
     refreshMarker(c);
     if (c.needs_review) markReviewed(c.cluster_id);
+  } else if (key === 'w') {
+    e.preventDefault();
+    SignGrader.openWrongClass(scope);   // arrow-key + Enter to pick a class
   } else if (key === 'enter') {
     e.preventDefault();
-    const root = currentPopup.marker.getPopup().getElement();
-    const note = root && root.querySelector('.grader-note');
+    const note = scope && scope.querySelector('.grader-note');
     SignGrader.setNote(c.cluster_id, note ? note.value : '', graderMeta(c));
     refreshMarker(c);
+    if (c.needs_review) markReviewed(c.cluster_id);
     currentPopup.marker.closePopup();
     advanceToNextReview(c);
   } else if (key === 'escape') {
-    currentPopup.marker.closePopup();
+    const dd = scope && scope.querySelector('.grader-class-dropdown.open');
+    if (dd) SignGrader.closeDropdown(scope);
+    else currentPopup.marker.closePopup();
   } else if (key === 't') {
     const state = SignGrader.toggleThumbnails();
     const cb = document.getElementById('thumb-toggle'); if (cb) cb.checked = state;
