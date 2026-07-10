@@ -26,12 +26,14 @@ a = Analysis(
     binaries=ult_bins,
     datas=[
         ('static', 'static'),   # Flask static folder (index.html, style.css, …)
+        ('gpx.fmt', '.'),       # ExifTool GPX print-format template (gps_extractor)
         *ult_datas,             # ultralytics YAML configs, default weights, etc.
     ],
     hiddenimports=[
         # Local modules imported lazily inside threads — static analysis misses them
         'pipeline',
         'gps_parser',
+        'gps_extractor',
         'geojson_utils',
         # ultralytics collected above
         *ult_hidden,

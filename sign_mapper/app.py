@@ -4,6 +4,7 @@ Run: python app.py  (browser opens automatically)
 """
 import json
 import shutil
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -11,6 +12,24 @@ from pathlib import Path
 from queue import Empty, Queue
 
 from flask import Flask, Response, jsonify, request, send_file, send_from_directory
+
+
+def check_exiftool():
+    """Return (available: bool, version: str|None) by running `exiftool -ver`.
+    Used to decide whether GPS can be pulled straight from the video metadata."""
+    try:
+        result = subprocess.run(
+            ["exiftool", "-ver"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return False, None
+    if result.returncode == 0:
+        return True, (result.stdout.strip() or None)
+    return False, None
+
+
+EXIFTOOL_AVAILABLE, EXIFTOOL_VERSION = check_exiftool()
 
 # When frozen by PyInstaller the executable and its data land in different places:
 #   sys.executable      → .../dist/WVSignMapper/WVSignMapper.exe  (writable, for outputs)
@@ -63,6 +82,11 @@ def index():
     return send_from_directory(app.static_folder, 'index.html')
 
 
+@app.route('/api/exiftool_available')
+def exiftool_available():
+    return jsonify({'available': EXIFTOOL_AVAILABLE, 'version': EXIFTOOL_VERSION})
+
+
 @app.route('/api/process', methods=['POST'])
 def start_processing():
     with _lock:
@@ -77,8 +101,12 @@ def start_processing():
     # web-app equivalent of the CLI's --inventory-dir flag.
     inventory_dir = (request.form.get('inventory_dir') or '').strip()
 
-    if not all([model_file, video_file, sidecar_file]):
-        return jsonify({'error': 'model, video, and sidecar are required'}), 400
+    if not model_file or not video_file:
+        return jsonify({'error': 'model and video are required'}), 400
+    # Sidecar is optional when ExifTool can pull GPS straight from the video.
+    if not (sidecar_file and sidecar_file.filename) and not EXIFTOOL_AVAILABLE:
+        return jsonify({'error': 'A GPS sidecar (.srt or .csv) is required — '
+                                 'ExifTool is not installed for automatic extraction'}), 400
 
     conf_threshold = float(request.form.get('conf_threshold', 0.5))
     match_radius = float(request.form.get('match_radius', 25.0))
@@ -91,10 +119,13 @@ def start_processing():
 
     model_path = upload_dir / (model_file.filename or 'model.pt')
     video_path = upload_dir / (video_file.filename or 'video.mp4')
-    sidecar_path = upload_dir / (sidecar_file.filename or 'sidecar.srt')
     model_file.save(str(model_path))
     video_file.save(str(video_path))
-    sidecar_file.save(str(sidecar_path))
+
+    sidecar_path = None
+    if sidecar_file and sidecar_file.filename:
+        sidecar_path = upload_dir / sidecar_file.filename
+        sidecar_file.save(str(sidecar_path))
 
     inventory_paths = []
     for inv_file in inventory_files:

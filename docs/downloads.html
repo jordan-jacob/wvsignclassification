@@ -34,6 +34,9 @@ cd wvsignclassification/sign_mapper
 pip install -r requirements.txt
 python app.py</pre>
     <p>Then open <a href="http://localhost:5000" style="color:#3182ce">http://localhost:5000</a> in your browser.</p>
+    <p style="margin-top:10px"><strong>Optional: ExifTool (for automatic GPS extraction)</strong><br>
+      Download from <a href="https://exiftool.org/install.html" style="color:#3182ce">exiftool.org</a> and add it to your PATH.
+      Without it, a GPS sidecar file (.srt or .csv) is required.</p>
     <blockquote class="note">
       <strong>Note:</strong> On some systems, use <code>python3</code> instead of <code>python</code>.
       The first run will download ~2GB of ML dependencies (PyTorch). This is a one-time download.

@@ -206,7 +206,9 @@ window.SignGrader = (function () {
     const r = reviews[id] || {};
     const cleanUrl = meta.thumbnail_url;
     const showThumb = thumbnailsEnabled && cleanUrl && (meta.sighting_count || 0) > 0;
-    const bboxUrl = cleanUrl ? cleanUrl.replace(/\/$/, '') + '/bbox' : '';
+    // bbox variant: an explicit URL when provided (static GitHub Pages files),
+    // otherwise derive from the clean URL's Flask route (/frame/<id> -> .../bbox).
+    const bboxUrl = meta.thumbnail_bbox_url || (cleanUrl ? cleanUrl.replace(/\/$/, '') + '/bbox' : '');
     // Two thumbnail versions: clean crop (default) and YOLO bbox overlay (Item 8).
     const thumb = showThumb ? `
       <div class="grader-thumb-wrap">

@@ -3,8 +3,7 @@
 const DEMO_GEOJSON = 'data/demo_detections.geojson';
 
 // Human-readable label for the demo route (real WVDOH dashcam run).
-// Updated by Task 2 to match the selected inference video.
-const ROUTE_LABEL = 'Wirt County, WV — Municipal route (Oct 2025)';
+const ROUTE_LABEL = 'US-119, Kanawha County, WV (April 2026)';
 
 // ── Color helpers ──────────────────────────────────────────────────────────
 function markerColor(props) {
@@ -29,10 +28,18 @@ function styleFor(props) {
 }
 
 function graderMeta(props, lat, lon) {
+  // Locally (Flask app) thumbnails come from the /frame/<id> route; on GitHub
+  // Pages they're static files whose paths are baked into the GeoJSON.
+  const local = SignGrader.isLocal();
+  const clean = local ? `/frame/${props.cluster_id}`
+                      : (props.thumbnail_url || `/frame/${props.cluster_id}`);
+  const bbox  = local ? `/frame/${props.cluster_id}/bbox`
+                      : (props.thumbnail_bbox_url || '');
   return {
     sign_class: props.sign_class, lat, lon,
     sighting_count: props.sighting_count,
-    thumbnail_url: props.thumbnail_url || `/frame/${props.cluster_id}`,
+    thumbnail_url: clean,
+    thumbnail_bbox_url: bbox,
   };
 }
 
@@ -56,7 +63,9 @@ function popupHtml(props, lat, lon) {
 }
 
 // ── Map init ───────────────────────────────────────────────────────────────
-const map = L.map('map').setView([38.28, -80.85], 11);
+// Initial view over the demo route (US-119, Kanawha County); renderFeatures()
+// fitBounds() refines this once the GeoJSON loads.
+const map = L.map('map').setView([38.333, -81.601], 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   maxZoom: 19,
@@ -218,8 +227,10 @@ function updateTally() {
   };
   panel.addTo(map);
 
-  // Thumbnail toggle now lives in the left sidebar (Item 1b).
+  // Thumbnail toggle now lives in the left sidebar (Item 1b). The docs demo now
+  // ships real static thumbnails (docs/data/frames/), so default them on.
   const thumbToggle = document.getElementById('thumb-toggle');
+  SignGrader.toggleThumbnails(true);
   thumbToggle.checked = SignGrader.thumbnailsOn();
   thumbToggle.addEventListener('change', function () {
     SignGrader.toggleThumbnails(this.checked);

@@ -76,6 +76,31 @@ html, body {
 }
 .toggle-note { font-size: 10px; color: #a0aec0; margin-top: 2px; }
 
+/* GPS source selector (Item 2) */
+#gps-source { display: flex; flex-direction: column; gap: 4px; margin: 2px 0; }
+.radio-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; color: #4a5568;
+  text-transform: none; letter-spacing: 0; cursor: pointer;
+}
+.radio-row input { cursor: pointer; }
+.radio-row.disabled { color: #a0aec0; cursor: not-allowed; }
+.radio-row.disabled input { cursor: not-allowed; }
+.exiftool-note { font-size: 10px; line-height: 1.4; margin-top: 2px; }
+.exiftool-note.ok { color: #38a169; }
+.exiftool-note.warn { color: #c05621; }
+.exiftool-note a { color: #3182ce; }
+
+/* Review exports section (Item 1a) */
+.sidebar-divider { border: none; border-top: 1px solid #e2e8f0; margin: 2px 0; }
+.sidebar-section-label {
+  font-size: 11px; font-weight: 700; color: #718096;
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px;
+}
+.review-exports .btn-primary,
+.review-exports .btn-secondary { font-size: 12px; padding: 6px 12px; }
+.review-exports .grader-help { margin-top: 2px; }
+
 #left-panel h2 {
   font-size: 15px;
   font-weight: 700;
@@ -191,10 +216,67 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  transition: margin-right 0.2s ease;
+}
+#right-panel.collapsed { margin-right: -300px; }
+
+/* Collapse button — top-left corner of the review panel (Item 1b) */
+#review-collapse {
+  position: absolute;
+  top: 10px;
+  left: 8px;
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f7f8fa;
+  color: #4a5568;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+#review-collapse:hover { background: #edf2f7; }
+
+/* Re-expand tab pinned to the right edge, with a needs-review count badge */
+#review-expand {
+  display: none;
+  position: fixed;
+  right: 0;
+  top: 70px;
+  z-index: 1200;
+  width: 22px;
+  min-height: 40px;
+  padding: 6px 0;
+  border: 1px solid #e2e8f0;
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  background: #fff;
+  color: #4a5568;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: -1px 1px 4px rgba(0,0,0,.12);
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+#review-expand.show { display: flex; }
+#review-expand:hover { background: #edf2f7; }
+.review-expand-badge {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #d69e2e;
+  border-radius: 9px;
+  padding: 2px 5px;
+  min-width: 16px;
+  text-align: center;
 }
 
 #review-header {
-  padding: 11px 14px;
+  padding: 11px 14px 11px 36px;
   border-bottom: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;

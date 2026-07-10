@@ -3,8 +3,11 @@ Core pipeline: frame extraction at 2fps, GPS interpolation, YOLO inference,
 DBSCAN spatial clustering, and per-cluster aggregation.
 
 CLI:
-    python pipeline.py --video V --sidecar S --model M --output out.geojson [--conf 0.5]
+    python pipeline.py --video V --model M --output out.geojson [--sidecar S] [--conf 0.5]
                        [--inventory I.geojson] [--annotations-dir /path/to/labels/]
+
+--sidecar is optional: when omitted, GPS is extracted from the video's embedded
+metadata with ExifTool (see gps_extractor.py).
 """
 import json
 import shutil
@@ -30,12 +33,15 @@ TOP_N_POSITION = 5       # highest-confidence detections used for the position m
 MIN_CONF_DEFAULT = 0.5
 
 
-def run_pipeline(model_path, video_path, sidecar_path, output_dir,
+def run_pipeline(model_path, video_path, sidecar_path=None, output_dir='.',
                  conf_threshold=MIN_CONF_DEFAULT, progress=None,
                  annotations_dir=None, extract_fps=EXTRACT_FPS):
     """
     Returns list of cluster dicts.  progress(str) receives status messages.
     If annotations_dir is provided, also writes qa_report.json to output_dir.
+
+    GPS source: a sidecar (.srt/.csv) when sidecar_path is given, otherwise the
+    video's embedded GPS metadata via ExifTool (gps_extractor).
     """
     if progress is None:
         progress = print
@@ -43,9 +49,18 @@ def run_pipeline(model_path, video_path, sidecar_path, output_dir,
     output_dir = Path(output_dir)
     (output_dir / 'frames').mkdir(parents=True, exist_ok=True)
 
-    progress("Loading GPS sidecar...")
-    fixes = parse_sidecar(sidecar_path)
-    progress(f"GPS: {len(fixes)} fixes loaded from {Path(sidecar_path).name}")
+    if sidecar_path is not None:
+        progress("Loading GPS sidecar...")
+        fixes = parse_sidecar(sidecar_path)
+        progress(f"GPS: {len(fixes)} fixes loaded from {Path(sidecar_path).name}")
+    else:
+        from gps_extractor import EXIFTOOL_AVAILABLE, extract_gps_from_video
+        if not EXIFTOOL_AVAILABLE:
+            raise ValueError(
+                "No GPS sidecar provided and ExifTool is not installed. "
+                "Either provide a .srt or .csv sidecar, or install ExifTool "
+                "from https://exiftool.org/install.html")
+        fixes = extract_gps_from_video(Path(video_path), progress=progress)
 
     progress("Loading YOLO model...")
     model = YOLO(str(model_path))
@@ -449,7 +464,8 @@ if __name__ == '__main__':
 
     ap = argparse.ArgumentParser(description='WV sign detection pipeline')
     ap.add_argument('--video', required=True)
-    ap.add_argument('--sidecar', required=True)
+    ap.add_argument('--sidecar', help='Optional GPS sidecar (.srt/.csv); '
+                                       'omit to extract GPS from the video via ExifTool')
     ap.add_argument('--model', required=True)
     ap.add_argument('--output', required=True, help='Output GeoJSON path')
     ap.add_argument('--inventory', help='Optional single WVDOH inventory GeoJSON')
@@ -457,7 +473,10 @@ if __name__ == '__main__':
                     help='Directory of WVDOH inventory GeoJSONs (merged before comparison)')
     ap.add_argument('--annotations-dir', dest='annotations_dir',
                     help='Directory of YOLO-format .txt labels (frame_<ts_ms>.txt)')
-    ap.add_argument('--conf', type=float, default=0.5, help='Confidence threshold')
+    ap.add_argument('--conf', '--confidence', dest='conf', type=float, default=0.5,
+                    help='Confidence threshold')
+    ap.add_argument('--fps', type=float, default=EXTRACT_FPS,
+                    help='Frames per second to extract for inference')
     args = ap.parse_args()
 
     out_path = Path(args.output)
@@ -470,6 +489,7 @@ if __name__ == '__main__':
         output_dir=out_dir,
         conf_threshold=args.conf,
         annotations_dir=args.annotations_dir,
+        extract_fps=args.fps,
     )
 
     if args.inventory_dir:

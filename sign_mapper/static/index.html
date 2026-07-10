@@ -22,8 +22,19 @@
       <label>Dashcam Video</label>
       <input type="file" id="video-file" accept=".mp4,.avi,.mov,.mkv" />
 
-      <label>GPS Sidecar (.srt or .csv)</label>
+      <label>GPS source</label>
+      <div id="gps-source">
+        <label class="radio-row disabled" id="gps-video-label">
+          <input type="radio" name="gps-source" value="video" id="gps-video" disabled />
+          Extract from video (requires ExifTool)
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="gps-source" value="sidecar" id="gps-sidecar" checked />
+          Upload sidecar file (.srt or .csv)
+        </label>
+      </div>
       <input type="file" id="sidecar-file" accept=".srt,.csv" />
+      <p id="exiftool-note" class="exiftool-note"></p>
 
       <label>Inventory GeoJSON (optional)</label>
       <input type="file" id="inventory-file" accept=".geojson,.json" />
@@ -43,11 +54,6 @@
       <input type="range" id="fps-slider" min="1" max="5" step="0.5" value="2" />
       <p class="slider-hint">Increase for fast roads (&gt;45&nbsp;mph). Higher FPS = longer processing time.</p>
 
-      <label class="toggle-row" style="margin-top:10px">
-        <input type="checkbox" id="thumb-toggle" /> Detection thumbnails
-      </label>
-      <span class="toggle-note">(requires local app)</span>
-
       <div id="radius-section" style="display:none">
         <div class="range-row" style="margin-top:8px">
           <label>Inventory Match Radius</label>
@@ -64,7 +70,22 @@
       <div id="log-box"></div>
     </div>
 
-    <button class="btn-secondary" id="export-btn" disabled>Export GeoJSON</button>
+    <div class="section">
+      <label class="toggle-row">
+        <input type="checkbox" id="thumb-toggle" /> Detection thumbnails
+      </label>
+      <span class="toggle-note">(requires local app)</span>
+    </div>
+
+    <div class="section review-exports">
+      <hr class="sidebar-divider" />
+      <div class="sidebar-section-label">Review exports</div>
+      <button class="btn-secondary" id="import-reviews">Import Reviews</button>
+      <button class="btn-secondary" id="export-reviews">Export Reviews</button>
+      <button class="btn-primary" id="export-geojson">Export GeoJSON</button>
+      <div class="grader-help">Keys: <b>c</b> approve · <b>w</b> wrong class · <b>u</b> unclear · <b>Enter</b> save · <b>t</b> thumbnails</div>
+      <input type="file" id="import-file" accept=".json" style="display:none" />
+    </div>
   </div>
 
   <!-- Re-expand tab (visible only when the left panel is collapsed) -->
@@ -77,6 +98,7 @@
 
   <!-- ===== RIGHT PANEL ===== -->
   <div id="right-panel">
+    <button id="review-collapse" title="Collapse panel">›</button>
     <div id="review-header">
       <strong>Review Queue</strong>
       <span id="review-count">—</span>
@@ -85,6 +107,12 @@
       <p class="review-empty">Run processing to populate the review queue.</p>
     </div>
   </div>
+
+  <!-- Re-expand tab (visible only when the review queue is collapsed) -->
+  <button id="review-expand" title="Expand review queue">
+    <span class="review-expand-arrow">‹</span>
+    <span id="review-expand-badge" class="review-expand-badge"></span>
+  </button>
 
 </div>
 
@@ -150,6 +178,48 @@ document.getElementById('radius-slider').addEventListener('input', function () {
 document.getElementById('inventory-file').addEventListener('change', function () {
   document.getElementById('radius-section').style.display = this.files.length ? '' : 'none';
 });
+
+// =========================================================================
+// GPS source: ExifTool availability + radio toggle (Item 2)
+// =========================================================================
+let exiftoolAvailable = false;
+(async function initGpsSource() {
+  const note         = document.getElementById('exiftool-note');
+  const videoRadio   = document.getElementById('gps-video');
+  const videoLabel   = document.getElementById('gps-video-label');
+  const sidecarRadio = document.getElementById('gps-sidecar');
+  const sidecarInput = document.getElementById('sidecar-file');
+
+  function syncSidecarVisibility() {
+    sidecarInput.style.display = sidecarRadio.checked ? '' : 'none';
+  }
+  document.querySelectorAll('input[name="gps-source"]').forEach(
+    r => r.addEventListener('change', syncSidecarVisibility));
+
+  try {
+    const data = await (await fetch('/api/exiftool_available')).json();
+    exiftoolAvailable = !!data.available;
+    if (!exiftoolAvailable) throw new Error('unavailable');
+    videoRadio.disabled = false;
+    videoRadio.checked = true;
+    videoLabel.classList.remove('disabled');
+    note.className = 'exiftool-note ok';
+    note.textContent =
+      `✓ ExifTool detected${data.version ? ' (v' + data.version + ')' : ''} — `
+      + 'GPS can be extracted directly from video.';
+  } catch (e) {
+    exiftoolAvailable = false;
+    videoRadio.disabled = true;
+    videoRadio.checked = false;
+    videoLabel.classList.add('disabled');
+    sidecarRadio.checked = true;
+    note.className = 'exiftool-note warn';
+    note.innerHTML =
+      'ExifTool not found — install it for automatic GPS extraction from video. '
+      + '<a href="https://exiftool.org/install.html" target="_blank" rel="noopener">Instructions</a>';
+  }
+  syncSidecarVisibility();
+})();
 
 // =========================================================================
 // Marker helpers
@@ -289,6 +359,7 @@ function renderReviewQueue() {
 
   document.getElementById('review-count').textContent =
     `${reviewedCount} of ${totalReviewable} reviewed`;
+  if (window.updateReviewExpandBadge) window.updateReviewExpandBadge();
 
   const sorted = [...needsReview].sort((a, b) => {
     const ad = a.discrepancy_type ? 0 : 1;
@@ -412,23 +483,8 @@ function buildGraderControls() {
   };
   tally.addTo(map);
 
-  const panel = L.control({ position: 'topright' });
-  panel.onAdd = function () {
-    const div = L.DomUtil.create('div', 'grader-tally grader-controls');
-    L.DomEvent.disableClickPropagation(div);
-    div.innerHTML = `
-      <div class="grader-io-row">
-        <button id="export-reviews">Export Reviews</button>
-        <button id="import-reviews">Import Reviews</button>
-      </div>
-      <div class="grader-io-row">
-        <button id="export-geojson">Export Reviewed GeoJSON</button>
-      </div>
-      <div class="grader-help">Keys: <b>c</b> approve · <b>w</b> wrong class · <b>u</b> unclear · <b>Enter</b> save · <b>t</b> thumbnails</div>
-      <input type="file" id="import-file" accept=".json" style="display:none"/>`;
-    return div;
-  };
-  panel.addTo(map);
+  // Export / import controls now live in the left sidebar (Item 1a); their
+  // click handlers are wired further down. The top-right map panel is removed.
 
   // About panel is dismissable (X); state persists in sessionStorage and the
   // ⓘ control below re-shows it.
@@ -568,6 +624,31 @@ document.addEventListener('keydown', e => {
 })();
 
 // =========================================================================
+// Collapsible review queue (right panel) — mirror of the left sidebar (Item 1b)
+// =========================================================================
+(function () {
+  const panel  = document.getElementById('right-panel');
+  const expand = document.getElementById('review-expand');
+  const badge  = document.getElementById('review-expand-badge');
+  function setCollapsed(collapsed) {
+    panel.classList.toggle('collapsed', collapsed);
+    expand.classList.toggle('show', collapsed);
+    sessionStorage.setItem('reviewQueueCollapsed', collapsed ? '1' : '0');
+    setTimeout(() => map.invalidateSize(), 220);
+  }
+  // Keep the collapsed-tab badge current with the number of needs-review items.
+  window.updateReviewExpandBadge = function () {
+    const n = clusters.filter(c => c.needs_review).length;
+    badge.textContent = n;
+    badge.style.display = n > 0 ? '' : 'none';
+    expand.title = `${n} needs review`;
+  };
+  document.getElementById('review-collapse').addEventListener('click', () => setCollapsed(true));
+  expand.addEventListener('click', () => setCollapsed(false));
+  setCollapsed(sessionStorage.getItem('reviewQueueCollapsed') === '1');
+})();
+
+// =========================================================================
 // Progress log helper
 // =========================================================================
 function appendLog(msg, isError = false) {
@@ -591,18 +672,21 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   const videoFile     = document.getElementById('video-file').files[0];
   const sidecarFile   = document.getElementById('sidecar-file').files[0];
   const inventoryFile = document.getElementById('inventory-file').files[0];
+  const useVideoGps   = document.getElementById('gps-video').checked;
 
-  if (!modelFile || !videoFile || !sidecarFile) {
-    alert('Select a YOLO checkpoint, video, and GPS sidecar file.');
+  if (!modelFile || !videoFile) {
+    alert('Select a YOLO checkpoint and a dashcam video.');
+    return;
+  }
+  if (!useVideoGps && !sidecarFile) {
+    alert('Select a GPS sidecar file, or choose "Extract from video" (requires ExifTool).');
     return;
   }
 
-  const runBtn    = document.getElementById('run-btn');
-  const exportBtn = document.getElementById('export-btn');
+  const runBtn = document.getElementById('run-btn');
 
   runBtn.disabled = true;
   runBtn.textContent = 'Uploading files…';
-  exportBtn.disabled = true;
 
   document.getElementById('progress-section').style.display = '';
   document.getElementById('log-box').innerHTML = '';
@@ -613,7 +697,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   const fd = new FormData();
   fd.append('model',    modelFile);
   fd.append('video',    videoFile);
-  fd.append('sidecar',  sidecarFile);
+  if (sidecarFile) fd.append('sidecar', sidecarFile);
   if (inventoryFile) fd.append('inventory', inventoryFile);
   fd.append('conf_threshold', document.getElementById('conf-slider').value);
   fd.append('fps',            document.getElementById('fps-slider').value);
@@ -662,7 +746,6 @@ document.getElementById('run-btn').addEventListener('click', async () => {
       appendLog(`Done — ${evt.count} sign clusters detected.`);
       runBtn.disabled = false;
       runBtn.textContent = 'Run Processing';
-      exportBtn.disabled = false;
       eventSource.close();
 
       const r = await fetch('/api/results');
@@ -685,13 +768,6 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     if (eventSource.readyState === EventSource.CLOSED) return;
     appendLog('Connection to server interrupted.', true);
   };
-});
-
-// =========================================================================
-// Export
-// =========================================================================
-document.getElementById('export-btn').addEventListener('click', () => {
-  window.location.href = '/api/export';
 });
 </script>
 </body>
