@@ -12,3 +12,4 @@ sign_mapper/dist/
 sign_mapper/outputs/
 __pycache__/
 *.pyc
+exiftool-13.59_64

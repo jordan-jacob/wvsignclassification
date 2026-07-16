@@ -52,7 +52,7 @@
         <span class="range-val"><span id="fps-val">2</span> fps</span>
       </div>
       <input type="range" id="fps-slider" min="1" max="5" step="0.5" value="2" />
-      <p class="slider-hint">Increase for fast roads (&gt;45&nbsp;mph). Higher FPS = longer processing time.</p>
+      <p class="slider-hint">Increase for fast roads. Higher FPS comes at the cost of longer processing time.</p>
 
       <div id="radius-section" style="display:none">
         <div class="range-row" style="margin-top:8px">
@@ -63,7 +63,7 @@
       </div>
     </div>
 
-    <button class="btn-primary" id="run-btn">Run Processing</button>
+    <button class="btn-primary" id="run-btn">Process Video</button>
 
     <div id="progress-section" style="display:none">
       <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
@@ -104,7 +104,8 @@
       <span id="review-count">—</span>
     </div>
     <div id="review-list">
-      <p class="review-empty">Run processing to populate the review queue.</p>
+      <p class="review-empty">Process a video to populate the review queue!
+      </p>
     </div>
   </div>
 
@@ -215,8 +216,8 @@ let exiftoolAvailable = false;
     sidecarRadio.checked = true;
     note.className = 'exiftool-note warn';
     note.innerHTML =
-      'ExifTool not found — install it for automatic GPS extraction from video. '
-      + '<a href="https://exiftool.org/install.html" target="_blank" rel="noopener">Instructions</a>';
+      'ExifTool not found. Install it for automatic GPS extraction from video. '
+      + '<a href="https://sourceforge.net/projects/exiftool/files/exiftool-13.59_64.zip/download" target="_blank" rel="noopener">Instructions</a>';
   }
   syncSidecarVisibility();
 })();
@@ -495,22 +496,6 @@ function buildGraderControls() {
     if (infoBtnDiv) infoBtnDiv.style.display = dismissed ? '' : 'none';
   }
 
-  const about = L.control({ position: 'bottomright' });
-  about.onAdd = function () {
-    const div = L.DomUtil.create('div', 'about-data-panel');
-    L.DomEvent.disableClickPropagation(div);
-    aboutDiv = div;
-    div.innerHTML =
-      `<button class="about-close" title="Dismiss">✕</button>` +
-      `<strong>About this data</strong><br>` +
-      `Sign inventory provided by WVDOH open-access GIS data (July 2026). ` +
-      `Warning signs are not included in the current inventory snapshot — comparison ` +
-      `for the Warning class is one-directional (detections only). ` +
-      `Full sign feature class pending from WVDOH.`;
-    div.querySelector('.about-close').addEventListener('click', () => setAboutDismissed(true));
-    return div;
-  };
-  about.addTo(map);
 
   const infoBtn = L.control({ position: 'topright' });
   infoBtn.onAdd = function () {
@@ -675,11 +660,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   const useVideoGps   = document.getElementById('gps-video').checked;
 
   if (!modelFile || !videoFile) {
-    alert('Select a YOLO checkpoint and a dashcam video.');
+    alert('Upload a YOLO checkpoint and a dashcam video.');
     return;
   }
   if (!useVideoGps && !sidecarFile) {
-    alert('Select a GPS sidecar file, or choose "Extract from video" (requires ExifTool).');
+    alert('Upload a GPS sidecar file, or choose "Extract from video" (requires ExifTool).');
     return;
   }
 
@@ -709,7 +694,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
   } catch (e) {
     appendLog('Upload failed: ' + e.message, true);
     runBtn.disabled = false;
-    runBtn.textContent = 'Run Processing';
+    runBtn.textContent = 'Process Video';
     return;
   }
 
@@ -717,11 +702,11 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     const err = await uploadRes.json().catch(() => ({ error: uploadRes.statusText }));
     appendLog('Error: ' + (err.error || 'Unknown error'), true);
     runBtn.disabled = false;
-    runBtn.textContent = 'Run Processing';
+    runBtn.textContent = 'Process Video';
     return;
   }
 
-  runBtn.textContent = 'Processing…';
+  runBtn.textContent = 'Processing Video...';
   setProgress(15);
   appendLog('Files uploaded — processing started…');
 
@@ -745,7 +730,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
       setProgress(100);
       appendLog(`Done — ${evt.count} sign clusters detected.`);
       runBtn.disabled = false;
-      runBtn.textContent = 'Run Processing';
+      runBtn.textContent = 'Process New Video';
       eventSource.close();
 
       const r = await fetch('/api/results');
@@ -759,7 +744,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
       document.getElementById('progress-bar').className = 'error';
       appendLog('ERROR: ' + evt.message, true);
       runBtn.disabled = false;
-      runBtn.textContent = 'Run Processing';
+      runBtn.textContent = 'Process Video';
       eventSource.close();
     }
   };
