@@ -1,0 +1,665 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59224266,
+          38.3262881
+        ]
+      },
+      "properties": {
+        "cluster_id": 0,
+        "sign_class": "Warnings",
+        "confidence": 0.9432,
+        "sighting_count": 37,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.7027,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 500,
+        "best_frame_ts": 11511,
+        "lat_std": 0.00018693,
+        "lon_std": 0.00011783,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_0_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_0_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59177871,
+          38.32703919
+        ]
+      },
+      "properties": {
+        "cluster_id": 1,
+        "sign_class": "TrafficLights",
+        "confidence": 0.8763,
+        "sighting_count": 31,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.9355,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 21988,
+        "best_frame_ts": 44511,
+        "lat_std": 8.899e-05,
+        "lon_std": 4.826e-05,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_1_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_1_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59183216,
+          38.32729028
+        ]
+      },
+      "properties": {
+        "cluster_id": 2,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.5521,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 49516,
+        "best_frame_ts": 49516,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_2_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_2_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.5920594,
+          38.32736236
+        ]
+      },
+      "properties": {
+        "cluster_id": 3,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.4699,
+        "sighting_count": 2,
+        "needs_review": true,
+        "review_reason": "Low confidence (0.47)",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 51484,
+        "best_frame_ts": 51985,
+        "lat_std": 6.41e-06,
+        "lon_std": 3.247e-05,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_3_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_3_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59265698,
+          38.32748772
+        ]
+      },
+      "properties": {
+        "cluster_id": 4,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.5342,
+        "sighting_count": 6,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 53987,
+        "best_frame_ts": 55488,
+        "lat_std": 3.302e-05,
+        "lon_std": 0.00015113,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_4_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_4_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59331139,
+          38.32764714
+        ]
+      },
+      "properties": {
+        "cluster_id": 5,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.825,
+        "sighting_count": 18,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.8889,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 57490,
+        "best_frame_ts": 60994,
+        "lat_std": 5.143e-05,
+        "lon_std": 0.00021104,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_5_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_5_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59472954,
+          38.32796401
+        ]
+      },
+      "properties": {
+        "cluster_id": 6,
+        "sign_class": "StopSigns",
+        "confidence": 0.5438,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 67000,
+        "best_frame_ts": 67000,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_6_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_6_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59575604,
+          38.32816179
+        ]
+      },
+      "properties": {
+        "cluster_id": 7,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9325,
+        "sighting_count": 26,
+        "needs_review": true,
+        "review_reason": "Split class vote (Informational 62% / HighwaySymbols 23%)",
+        "class_vote_pct": 0.6154,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 68501,
+        "best_frame_ts": 74507,
+        "lat_std": 5.218e-05,
+        "lon_std": 0.00032042,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_7_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_7_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.5962519,
+          38.32820935
+        ]
+      },
+      "properties": {
+        "cluster_id": 8,
+        "sign_class": "HighwaySymbols",
+        "confidence": 0.671,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 77510,
+        "best_frame_ts": 77510,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_8_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_8_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59655113,
+          38.32825122
+        ]
+      },
+      "properties": {
+        "cluster_id": 9,
+        "sign_class": "HighwaySymbols",
+        "confidence": 0.7898,
+        "sighting_count": 8,
+        "needs_review": true,
+        "review_reason": "Split class vote (HighwaySymbols 50% / TrafficLights 38%)",
+        "class_vote_pct": 0.5,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 79012,
+        "best_frame_ts": 80013,
+        "lat_std": 2.311e-05,
+        "lon_std": 0.0001264,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_9_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_9_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59694242,
+          38.32862686
+        ]
+      },
+      "properties": {
+        "cluster_id": 10,
+        "sign_class": "HighwaySymbols",
+        "confidence": 0.5143,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 86986,
+        "best_frame_ts": 86986,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_10_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_10_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59689583,
+          38.3290409
+        ]
+      },
+      "properties": {
+        "cluster_id": 11,
+        "sign_class": "Warnings",
+        "confidence": 0.3775,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting; Low confidence (0.38)",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 90490,
+        "best_frame_ts": 90490,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_11_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_11_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59677051,
+          38.33081757
+        ]
+      },
+      "properties": {
+        "cluster_id": 12,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9248,
+        "sighting_count": 44,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.9091,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 91991,
+        "best_frame_ts": 102001,
+        "lat_std": 0.00051708,
+        "lon_std": 3.037e-05,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_12_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_12_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59683908,
+          38.33345456
+        ]
+      },
+      "properties": {
+        "cluster_id": 13,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9233,
+        "sighting_count": 58,
+        "needs_review": true,
+        "review_reason": "Split class vote (Informational 69% / Warnings 21%)",
+        "class_vote_pct": 0.6897,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 108508,
+        "best_frame_ts": 116516,
+        "lat_std": 0.00065893,
+        "lon_std": 2.247e-05,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_13_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_13_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59783675,
+          38.33539891
+        ]
+      },
+      "properties": {
+        "cluster_id": 14,
+        "sign_class": "MileMarkers",
+        "confidence": 0.7994,
+        "sighting_count": 7,
+        "needs_review": true,
+        "review_reason": "Split class vote (MileMarkers 43% / Warnings 29%)",
+        "class_vote_pct": 0.4286,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 130497,
+        "best_frame_ts": 131498,
+        "lat_std": 4.795e-05,
+        "lon_std": 0.00021736,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_14_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_14_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.59917797,
+          38.33565751
+        ]
+      },
+      "properties": {
+        "cluster_id": 15,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.8536,
+        "sighting_count": 1,
+        "needs_review": true,
+        "review_reason": "Single sighting",
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 137003,
+        "best_frame_ts": 137003,
+        "lat_std": 0.0,
+        "lon_std": 0.0,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_15_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_15_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.6001411,
+          38.33583854
+        ]
+      },
+      "properties": {
+        "cluster_id": 16,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9061,
+        "sighting_count": 7,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 138505,
+        "best_frame_ts": 141007,
+        "lat_std": 5.216e-05,
+        "lon_std": 0.00027554,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_16_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_16_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.60076577,
+          38.33595944
+        ]
+      },
+      "properties": {
+        "cluster_id": 17,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.6423,
+        "sighting_count": 2,
+        "needs_review": true,
+        "review_reason": "Split class vote (Informational 50% / MileMarkers 50%)",
+        "class_vote_pct": 0.5,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 142509,
+        "best_frame_ts": 143009,
+        "lat_std": 1.377e-05,
+        "lon_std": 6.992e-05,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_17_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_17_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.6037859,
+          38.33663799
+        ]
+      },
+      "properties": {
+        "cluster_id": 18,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.917,
+        "sighting_count": 27,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.9259,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 146012,
+        "best_frame_ts": 152986,
+        "lat_std": 0.00016547,
+        "lon_std": 0.00070075,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_18_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_18_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.60681025,
+          38.33760551
+        ]
+      },
+      "properties": {
+        "cluster_id": 19,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9218,
+        "sighting_count": 28,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.9643,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 155488,
+        "best_frame_ts": 162996,
+        "lat_std": 0.00041278,
+        "lon_std": 0.00103403,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_19_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_19_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.60961334,
+          38.33927791
+        ]
+      },
+      "properties": {
+        "cluster_id": 20,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9279,
+        "sighting_count": 43,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 1.0,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 168001,
+        "best_frame_ts": 173506,
+        "lat_std": 0.00034593,
+        "lon_std": 0.00050226,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_20_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_20_bbox.jpg"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -81.6105689,
+          38.34010353
+        ]
+      },
+      "properties": {
+        "cluster_id": 21,
+        "sign_class": "Informational/Regulatory",
+        "confidence": 0.9168,
+        "sighting_count": 19,
+        "needs_review": false,
+        "review_reason": null,
+        "class_vote_pct": 0.7895,
+        "video_source": "260424_090437_028_FH.mp4",
+        "first_seen_ts": 176009,
+        "best_frame_ts": 179512,
+        "lat_std": 0.0002372,
+        "lon_std": 0.00025256,
+        "inventory_match": null,
+        "inventory_distance_m": null,
+        "discrepancy_type": null,
+        "thumbnail_url": "data/frames/cluster_21_clean.jpg",
+        "inventory_source": null,
+        "thumbnail_bbox_url": "data/frames/cluster_21_bbox.jpg"
+      }
+    }
+  ]
+}

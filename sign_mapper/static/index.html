@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WV Sign Mapper</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== LEFT PANEL ===== -->
+  <div id="left-panel">
+    <button id="sidebar-collapse" title="Collapse panel">‹</button>
+    <h2>WV Sign Mapper</h2>
+
+    <div class="section">
+      <label>YOLO Checkpoint (.pt)</label>
+      <input type="file" id="model-file" accept=".pt" />
+
+      <label>Dashcam Video</label>
+      <input type="file" id="video-file" accept=".mp4,.avi,.mov,.mkv" />
+
+      <label>GPS source</label>
+      <div id="gps-source">
+        <label class="radio-row disabled" id="gps-video-label">
+          <input type="radio" name="gps-source" value="video" id="gps-video" disabled />
+          Extract from video (requires ExifTool)
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="gps-source" value="sidecar" id="gps-sidecar" checked />
+          Upload sidecar file (.srt or .csv)
+        </label>
+      </div>
+      <input type="file" id="sidecar-file" accept=".srt,.csv" />
+      <p id="exiftool-note" class="exiftool-note"></p>
+
+      <label>Inventory GeoJSON (optional)</label>
+      <input type="file" id="inventory-file" accept=".geojson,.json" />
+    </div>
+
+    <div class="section">
+      <div class="range-row">
+        <label>Confidence Threshold</label>
+        <span class="range-val" id="conf-val">0.50</span>
+      </div>
+      <input type="range" id="conf-slider" min="0.1" max="0.9" step="0.05" value="0.5" />
+
+      <div class="range-row" style="margin-top:10px">
+        <label>Frames Per Second</label>
+        <span class="range-val"><span id="fps-val">2</span> fps</span>
+      </div>
+      <input type="range" id="fps-slider" min="1" max="5" step="0.5" value="2" />
+      <p class="slider-hint">Increase for fast roads (&gt;45&nbsp;mph). Higher FPS = longer processing time.</p>
+
+      <div id="radius-section" style="display:none">
+        <div class="range-row" style="margin-top:8px">
+          <label>Inventory Match Radius</label>
+          <span class="range-val"><span id="radius-val">25</span>m</span>
+        </div>
+        <input type="range" id="radius-slider" min="5" max="100" step="5" value="25" />
+      </div>
+    </div>
+
+    <button class="btn-primary" id="run-btn">Run Processing</button>
+
+    <div id="progress-section" style="display:none">
+      <div id="progress-bar-wrap"><div id="progress-bar"></div></div>
+      <div id="log-box"></div>
+    </div>
+
+    <div class="section">
+      <label class="toggle-row">
+        <input type="checkbox" id="thumb-toggle" /> Detection thumbnails
+      </label>
+      <span class="toggle-note">(requires local app)</span>
+    </div>
+
+    <div class="section review-exports">
+      <hr class="sidebar-divider" />
+      <div class="sidebar-section-label">Review exports</div>
+      <button class="btn-secondary" id="import-reviews">Import Reviews</button>
+      <button class="btn-secondary" id="export-reviews">Export Reviews</button>
+      <button class="btn-primary" id="export-geojson">Export GeoJSON</button>
+      <div class="grader-help">Keys: <b>c</b> approve · <b>w</b> wrong class · <b>u</b> unclear · <b>Enter</b> save · <b>t</b> thumbnails</div>
+      <input type="file" id="import-file" accept=".json" style="display:none" />
+    </div>
+  </div>
+
+  <!-- Re-expand tab (visible only when the left panel is collapsed) -->
+  <button id="sidebar-expand" title="Expand panel">›</button>
+
+  <!-- ===== CENTER PANEL ===== -->
+  <div id="center-panel">
+    <div id="map"></div>
+  </div>
+
+  <!-- ===== RIGHT PANEL ===== -->
+  <div id="right-panel">
+    <button id="review-collapse" title="Collapse panel">›</button>
+    <div id="review-header">
+      <strong>Review Queue</strong>
+      <span id="review-count">—</span>
+    </div>
+    <div id="review-list">
+      <p class="review-empty">Run processing to populate the review queue.</p>
+    </div>
+  </div>
+
+  <!-- Re-expand tab (visible only when the review queue is collapsed) -->
+  <button id="review-expand" title="Expand review queue">
+    <span class="review-expand-arrow">‹</span>
+    <span id="review-expand-badge" class="review-expand-badge"></span>
+  </button>
+
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="/static/grader.js"></script>
+<script>
+// =========================================================================
+// State
+// =========================================================================
+let clusters = [];        // all cluster objects from the server
+let markerMap = {};       // cluster_id → Leaflet CircleMarker
+let eventSource = null;
+let reviewedCount = 0;
+let currentPopup = null;  // { id, marker } of the open grader popup
+let tallyDiv = null;      // grader tally control element
+
+// =========================================================================
+// Map init
+// =========================================================================
+const map = L.map('map').setView([38.5, -80.5], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 19,
+}).addTo(map);
+
+buildGraderControls();
+
+// One delegated click/change listener on the map container drives every popup's
+// grader buttons/dropdown (Leaflet popups are created lazily, so per-popup
+// listeners are fragile — Item 7).
+SignGrader.wireDelegation(
+  document.getElementById('map'),
+  (id) => { const c = clusters.find(x => String(x.cluster_id) === String(id)); return c ? graderMeta(c) : null; },
+  {
+    onChange: (id) => {
+      const c = clusters.find(x => String(x.cluster_id) === String(id));
+      if (!c) return;
+      refreshMarker(c);
+      if (c.needs_review) markReviewed(c.cluster_id);   // clear server-side flag
+    },
+    onSave: (id) => {
+      const c = clusters.find(x => String(x.cluster_id) === String(id));
+      if (!c) return;
+      const m = markerMap[c.cluster_id];
+      if (m) m.closePopup();
+      advanceToNextReview(c);
+    },
+  },
+);
+
+// =========================================================================
+// Slider wiring
+// =========================================================================
+document.getElementById('conf-slider').addEventListener('input', function () {
+  document.getElementById('conf-val').textContent = parseFloat(this.value).toFixed(2);
+});
+document.getElementById('fps-slider').addEventListener('input', function () {
+  document.getElementById('fps-val').textContent = parseFloat(this.value);
+});
+document.getElementById('radius-slider').addEventListener('input', function () {
+  document.getElementById('radius-val').textContent = this.value;
+});
+document.getElementById('inventory-file').addEventListener('change', function () {
+  document.getElementById('radius-section').style.display = this.files.length ? '' : 'none';
+});
+
+// =========================================================================
+// GPS source: ExifTool availability + radio toggle (Item 2)
+// =========================================================================
+let exiftoolAvailable = false;
+(async function initGpsSource() {
+  const note         = document.getElementById('exiftool-note');
+  const videoRadio   = document.getElementById('gps-video');
+  const videoLabel   = document.getElementById('gps-video-label');
+  const sidecarRadio = document.getElementById('gps-sidecar');
+  const sidecarInput = document.getElementById('sidecar-file');
+
+  function syncSidecarVisibility() {
+    sidecarInput.style.display = sidecarRadio.checked ? '' : 'none';
+  }
+  document.querySelectorAll('input[name="gps-source"]').forEach(
+    r => r.addEventListener('change', syncSidecarVisibility));
+
+  try {
+    const data = await (await fetch('/api/exiftool_available')).json();
+    exiftoolAvailable = !!data.available;
+    if (!exiftoolAvailable) throw new Error('unavailable');
+    videoRadio.disabled = false;
+    videoRadio.checked = true;
+    videoLabel.classList.remove('disabled');
+    note.className = 'exiftool-note ok';
+    note.textContent =
+      `✓ ExifTool detected${data.version ? ' (v' + data.version + ')' : ''} — `
+      + 'GPS can be extracted directly from video.';
+  } catch (e) {
+    exiftoolAvailable = false;
+    videoRadio.disabled = true;
+    videoRadio.checked = false;
+    videoLabel.classList.add('disabled');
+    sidecarRadio.checked = true;
+    note.className = 'exiftool-note warn';
+    note.innerHTML =
+      'ExifTool not found — install it for automatic GPS extraction from video. '
+      + '<a href="https://exiftool.org/install.html" target="_blank" rel="noopener">Instructions</a>';
+  }
+  syncSidecarVisibility();
+})();
+
+// =========================================================================
+// Marker helpers
+// =========================================================================
+function markerColor(c) {
+  const dec = SignGrader.decisionColor(c.cluster_id);      // grader decision wins
+  if (dec) return dec;
+  if (c.discrepancy_type === 'in_inventory_not_detected') return '#718096';
+  if (c.discrepancy_type)                                  return '#e53e3e';
+  if (!c.needs_review)                                     return '#38a169';
+  return '#d69e2e';
+}
+
+function markerRadius(c) {
+  return Math.min(8 + (c.sighting_count || 1) * 1.5, 20);
+}
+
+// no_sign (false positive) markers get a dashed outline to distinguish them
+// from the solid-grey "in inventory, not detected" markers.
+function styleFor(c) {
+  const col = markerColor(c);
+  return {
+    color: col, fillColor: col,
+    dashArray: SignGrader.decisionOf(c.cluster_id) === 'no_sign' ? '4 3' : null,
+  };
+}
+
+function graderMeta(c) {
+  return {
+    sign_class: c.sign_class, lat: c.lat_median, lon: c.lon_median,
+    sighting_count: c.sighting_count,
+    thumbnail_url: c.thumbnail_url || `/frame/${c.cluster_id}`,
+  };
+}
+
+function popupHtml(c) {
+  const rows = [
+    ['Confidence', (c.confidence * 100).toFixed(1) + '%'],
+    ['Sightings',  c.sighting_count],
+    ['Vote %',     (c.class_vote_pct * 100).toFixed(0) + '%'],
+    ['Needs review', c.needs_review ? '⚠ Yes' : '✓ No'],
+  ];
+  if (c.review_reason)         rows.push(['Reason', `<em>${c.review_reason}</em>`]);
+  if (c.discrepancy_type)      rows.push(['Discrepancy', c.discrepancy_type]);
+  if (c.inventory_distance_m != null) rows.push(['Inv. dist.', c.inventory_distance_m + ' m']);
+  if (c.inventory_source)      rows.push(['Inv. source', c.inventory_source]);
+  if (c.video_source)          rows.push(['Video', c.video_source]);
+
+  const tableRows = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+
+  return `<div class="grader-popup" style="min-width:220px">
+    <strong style="font-size:13px">${SignGrader.collapseClass(c.sign_class)}</strong>
+    <table>${tableRows}</table>
+    ${SignGrader.graderSectionHtml(c.cluster_id, graderMeta(c))}
+  </div>`;
+}
+
+// =========================================================================
+// Render map markers
+// =========================================================================
+function renderMarkers() {
+  Object.values(markerMap).forEach(m => map.removeLayer(m));
+  markerMap = {};
+
+  if (!clusters.length) return;
+
+  const bounds = [];
+  clusters.forEach(c => {
+    if (c.lat_median == null || c.lon_median == null) return;
+    const ll = [c.lat_median, c.lon_median];
+    bounds.push(ll);
+
+    const marker = L.circleMarker(ll, {
+      radius: markerRadius(c),
+      ...styleFor(c),
+      fillOpacity: 0.75,
+      weight: 2,
+    });
+    marker.bindPopup(popupHtml(c), { maxWidth: 340 });
+    marker.on('click', () => {
+      marker.openPopup();
+      highlightReviewItem(c.cluster_id);
+    });
+    marker.on('popupopen', (e) => wireMarkerPopup(e.popup, marker, c));
+    marker.on('popupclose', () => { if (currentPopup && currentPopup.id === c.cluster_id) currentPopup = null; });
+    marker.addTo(map);
+    markerMap[c.cluster_id] = marker;
+  });
+
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+  updateTally();
+}
+
+// =========================================================================
+// Grader popup wiring
+// =========================================================================
+function refreshMarker(c) {
+  const m = markerMap[c.cluster_id];
+  if (m) m.setStyle(styleFor(c));
+  updateTally();
+}
+
+// Popup button/keyboard handling is delegated once (see wireDelegation call
+// below); here we only track which popup is open.
+function wireMarkerPopup(popup, marker, c) {
+  currentPopup = { id: c.cluster_id, marker };
+}
+
+// Open the popup for the nearest unreviewed marker with needs_review: true.
+function advanceToNextReview(fromCluster) {
+  const graded = id => !!SignGrader.getReview(id);
+  const candidates = clusters.filter(
+    c => c.needs_review && !graded(c.cluster_id) &&
+         c.lat_median != null && markerMap[c.cluster_id]);
+  if (!candidates.length) return;
+  const fx = fromCluster.lat_median, fy = fromCluster.lon_median;
+  candidates.sort((a, b) => {
+    const da = (a.lat_median - fx) ** 2 + (a.lon_median - fy) ** 2;
+    const db = (b.lat_median - fx) ** 2 + (b.lon_median - fy) ** 2;
+    return da - db;
+  });
+  const next = candidates[0];
+  const m = markerMap[next.cluster_id];
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 16));
+  m.openPopup();
+}
+
+// =========================================================================
+// Review queue
+// =========================================================================
+function renderReviewQueue() {
+  const needsReview = clusters.filter(c => c.needs_review);
+  const totalReviewable = clusters.filter(
+    c => c.sighting_count > 0 || c.discrepancy_type
+  ).length;
+  reviewedCount = totalReviewable - needsReview.length;
+
+  document.getElementById('review-count').textContent =
+    `${reviewedCount} of ${totalReviewable} reviewed`;
+  if (window.updateReviewExpandBadge) window.updateReviewExpandBadge();
+
+  const sorted = [...needsReview].sort((a, b) => {
+    const ad = a.discrepancy_type ? 0 : 1;
+    const bd = b.discrepancy_type ? 0 : 1;
+    if (ad !== bd) return ad - bd;
+    return a.confidence - b.confidence;
+  });
+
+  const list = document.getElementById('review-list');
+  if (!sorted.length) {
+    list.innerHTML = '<p class="review-empty">All items reviewed ✓</p>';
+    return;
+  }
+
+  list.innerHTML = sorted.map(c => {
+    const badgeClass = c.discrepancy_type === 'in_inventory_not_detected' ? 'badge-grey'
+      : c.discrepancy_type ? 'badge-red' : 'badge-yellow';
+    const badgeLabel = c.discrepancy_type === 'in_inventory_not_detected' ? 'Missing'
+      : c.discrepancy_type ? 'Discrepancy' : 'Low confidence';
+
+    const thumb = c.sighting_count > 0
+      ? `<img src="/frame/${c.cluster_id}" class="review-thumb"
+             onerror="this.style.display='none'" />`
+      : '<div class="review-thumb-missing">Inventory-only — no frame</div>';
+
+    return `
+      <div class="review-item" id="ri-${c.cluster_id}" data-id="${c.cluster_id}">
+        <div class="review-item-header">
+          <span class="review-class">${SignGrader.collapseClass(c.sign_class)}</span>
+          <span class="badge ${badgeClass}">${badgeLabel}</span>
+        </div>
+        ${thumb}
+        <div class="review-meta">
+          <span>Conf: ${(c.confidence * 100).toFixed(0)}%</span>
+          <span>Sightings: ${c.sighting_count}</span>
+        </div>
+        ${c.review_reason
+          ? `<div class="review-reason">${c.review_reason}</div>`
+          : ''}
+        <div style="text-align:right;margin-top:5px">
+          <button class="review-btn" onclick="event.stopPropagation(); markReviewed(${c.cluster_id})">
+            Mark Reviewed
+          </button>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Click → jump to marker
+  list.querySelectorAll('.review-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = parseInt(el.dataset.id);
+      const m = markerMap[id];
+      if (m) { map.setView(m.getLatLng(), 17); m.openPopup(); }
+    });
+  });
+}
+
+function highlightReviewItem(clusterId) {
+  document.querySelectorAll('.review-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`ri-${clusterId}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+}
+
+// =========================================================================
+// Mark reviewed (called from popup button or review-queue button)
+// =========================================================================
+window.markReviewed = async function(clusterId) {
+  const res = await fetch(`/api/mark-reviewed/${clusterId}`, { method: 'POST' });
+  if (!res.ok) return;
+
+  const c = clusters.find(c => c.cluster_id === clusterId);
+  if (!c) return;
+  c.needs_review = false;
+  c.review_reason = null;
+
+  const m = markerMap[clusterId];
+  if (m) {
+    m.setStyle(styleFor(c));
+    // Don't rebuild the popup while it's open — it would drop the wired grader
+    // handlers the reviewer is interacting with.
+    if (!(currentPopup && currentPopup.id === clusterId)) m.setPopupContent(popupHtml(c));
+  }
+  renderReviewQueue();
+};
+
+// =========================================================================
+// Grader controls: tally, thumbnail toggle, export / import, keyboard
+// =========================================================================
+function currentVideoSource() {
+  const c = clusters.find(x => x.video_source);
+  return c ? c.video_source : null;
+}
+
+function updateTally() {
+  if (!tallyDiv) return;
+  const t = SignGrader.tally();
+  const total = clusters.filter(c => c.sighting_count > 0 || c.discrepancy_type).length;
+  tallyDiv.innerHTML =
+    `<strong>Reviewed: ${t.reviewed} / ${total}</strong>` +
+    `<div class="tally-sub">${t.approved} approved · ${t.wrong} wrong · ${t.unclear} unclear · ${t.no_sign} false pos.</div>`;
+}
+
+function refreshOpenPopup() {
+  if (!currentPopup) return;
+  const c = clusters.find(x => x.cluster_id === currentPopup.id);
+  if (!c) return;
+  const popup = currentPopup.marker.getPopup();
+  popup.setContent(popupHtml(c));
+  const root = popup.getElement();
+  if (root) wireMarkerPopup(popup, currentPopup.marker, c);
+}
+
+function buildGraderControls() {
+  const tally = L.control({ position: 'topright' });
+  tally.onAdd = function () {
+    const div = L.DomUtil.create('div', 'grader-tally');
+    L.DomEvent.disableClickPropagation(div);
+    tallyDiv = div;
+    div.innerHTML = 'Reviewed: 0 / 0';
+    return div;
+  };
+  tally.addTo(map);
+
+  // Export / import controls now live in the left sidebar (Item 1a); their
+  // click handlers are wired further down. The top-right map panel is removed.
+
+  // About panel is dismissable (X); state persists in sessionStorage and the
+  // ⓘ control below re-shows it.
+  let aboutDiv = null, infoBtnDiv = null;
+  function setAboutDismissed(dismissed) {
+    sessionStorage.setItem('aboutDismissed', dismissed ? '1' : '0');
+    if (aboutDiv)   aboutDiv.style.display   = dismissed ? 'none' : '';
+    if (infoBtnDiv) infoBtnDiv.style.display = dismissed ? '' : 'none';
+  }
+
+  const about = L.control({ position: 'bottomright' });
+  about.onAdd = function () {
+    const div = L.DomUtil.create('div', 'about-data-panel');
+    L.DomEvent.disableClickPropagation(div);
+    aboutDiv = div;
+    div.innerHTML =
+      `<button class="about-close" title="Dismiss">✕</button>` +
+      `<strong>About this data</strong><br>` +
+      `Sign inventory provided by WVDOH open-access GIS data (July 2026). ` +
+      `Warning signs are not included in the current inventory snapshot — comparison ` +
+      `for the Warning class is one-directional (detections only). ` +
+      `Full sign feature class pending from WVDOH.`;
+    div.querySelector('.about-close').addEventListener('click', () => setAboutDismissed(true));
+    return div;
+  };
+  about.addTo(map);
+
+  const infoBtn = L.control({ position: 'topright' });
+  infoBtn.onAdd = function () {
+    const div = L.DomUtil.create('div', 'leaflet-bar about-info-btn');
+    L.DomEvent.disableClickPropagation(div);
+    infoBtnDiv = div;
+    div.innerHTML = `<a href="#" role="button" title="About this data">ⓘ</a>`;
+    div.querySelector('a').addEventListener('click', (e) => { e.preventDefault(); setAboutDismissed(false); });
+    return div;
+  };
+  infoBtn.addTo(map);
+
+  setAboutDismissed(sessionStorage.getItem('aboutDismissed') === '1');
+
+  // Thumbnail toggle now lives in the left sidebar (Item 1b).
+  const thumbToggle = document.getElementById('thumb-toggle');
+  thumbToggle.checked = SignGrader.thumbnailsOn();
+  thumbToggle.addEventListener('change', function () {
+    SignGrader.toggleThumbnails(this.checked);
+    refreshOpenPopup();
+  });
+  document.getElementById('export-reviews').addEventListener('click', () => {
+    SignGrader.setVideoSource(currentVideoSource());
+    SignGrader.downloadJson(SignGrader.exportReviews(), 'reviews.json');
+  });
+  // Reviewed GeoJSON: bakes in-session decisions into feature properties and
+  // drops false positives (Item 6).
+  document.getElementById('export-geojson').addEventListener('click', () => {
+    SignGrader.setVideoSource(currentVideoSource());
+    const features = clusters
+      .filter(c => c.lat_median != null && c.lon_median != null)
+      .map(c => {
+        const { lat_median, lon_median, ...props } = c;
+        return { type: 'Feature',
+                 geometry: { type: 'Point', coordinates: [lon_median, lat_median] },
+                 properties: props };
+      });
+    SignGrader.downloadJson(SignGrader.buildReviewedGeoJson(features), SignGrader.reviewedFilename());
+  });
+  const importFile = document.getElementById('import-file');
+  document.getElementById('import-reviews').addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', () => {
+    const f = importFile.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        SignGrader.importReviews(JSON.parse(e.target.result));
+        renderMarkers();
+      } catch (err) { alert('Invalid reviews JSON: ' + err.message); }
+    };
+    reader.readAsText(f);
+    importFile.value = '';
+  });
+}
+
+// Keyboard shortcuts while a grader popup is open
+document.addEventListener('keydown', e => {
+  if (!currentPopup) return;
+  const inField = ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+  const key = e.key.toLowerCase();
+  if (inField && key !== 'escape' && key !== 'enter') return;
+
+  const c = clusters.find(x => x.cluster_id === currentPopup.id);
+  if (!c) return;
+  const rootEl = currentPopup.marker.getPopup().getElement();
+  const scope = rootEl && rootEl.querySelector('.grader-popup');
+
+  if (key === 'c' || key === 'u') {
+    SignGrader.decide(c.cluster_id, key === 'c' ? 'approved' : 'unclear', graderMeta(c));
+    SignGrader.refreshScope(scope, c.cluster_id);
+    refreshMarker(c);
+    if (c.needs_review) markReviewed(c.cluster_id);
+  } else if (key === 'w') {
+    e.preventDefault();
+    SignGrader.openWrongClass(scope);   // arrow-key + Enter to pick a class
+  } else if (key === 'enter') {
+    e.preventDefault();
+    const note = scope && scope.querySelector('.grader-note');
+    SignGrader.setNote(c.cluster_id, note ? note.value : '', graderMeta(c));
+    refreshMarker(c);
+    if (c.needs_review) markReviewed(c.cluster_id);
+    currentPopup.marker.closePopup();
+    advanceToNextReview(c);
+  } else if (key === 'escape') {
+    const dd = scope && scope.querySelector('.grader-class-dropdown.open');
+    if (dd) SignGrader.closeDropdown(scope);
+    else currentPopup.marker.closePopup();
+  } else if (key === 't') {
+    const state = SignGrader.toggleThumbnails();
+    const cb = document.getElementById('thumb-toggle'); if (cb) cb.checked = state;
+    refreshOpenPopup();
+  }
+});
+
+// =========================================================================
+// Collapsible left sidebar (Item 1c)
+// =========================================================================
+(function () {
+  const panel  = document.getElementById('left-panel');
+  const expand = document.getElementById('sidebar-expand');
+  function setCollapsed(collapsed) {
+    panel.classList.toggle('collapsed', collapsed);
+    expand.classList.toggle('show', collapsed);
+    sessionStorage.setItem('sidebarCollapsed', collapsed ? '1' : '0');
+    setTimeout(() => map.invalidateSize(), 220);
+  }
+  document.getElementById('sidebar-collapse').addEventListener('click', () => setCollapsed(true));
+  expand.addEventListener('click', () => setCollapsed(false));
+  setCollapsed(sessionStorage.getItem('sidebarCollapsed') === '1');
+})();
+
+// =========================================================================
+// Collapsible review queue (right panel) — mirror of the left sidebar (Item 1b)
+// =========================================================================
+(function () {
+  const panel  = document.getElementById('right-panel');
+  const expand = document.getElementById('review-expand');
+  const badge  = document.getElementById('review-expand-badge');
+  function setCollapsed(collapsed) {
+    panel.classList.toggle('collapsed', collapsed);
+    expand.classList.toggle('show', collapsed);
+    sessionStorage.setItem('reviewQueueCollapsed', collapsed ? '1' : '0');
+    setTimeout(() => map.invalidateSize(), 220);
+  }
+  // Keep the collapsed-tab badge current with the number of needs-review items.
+  window.updateReviewExpandBadge = function () {
+    const n = clusters.filter(c => c.needs_review).length;
+    badge.textContent = n;
+    badge.style.display = n > 0 ? '' : 'none';
+    expand.title = `${n} needs review`;
+  };
+  document.getElementById('review-collapse').addEventListener('click', () => setCollapsed(true));
+  expand.addEventListener('click', () => setCollapsed(false));
+  setCollapsed(sessionStorage.getItem('reviewQueueCollapsed') === '1');
+})();
+
+// =========================================================================
+// Progress log helper
+// =========================================================================
+function appendLog(msg, isError = false) {
+  const p = document.createElement('p');
+  if (isError) p.className = 'err';
+  p.textContent = msg;
+  const box = document.getElementById('log-box');
+  box.appendChild(p);
+  box.scrollTop = box.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+// =========================================================================
+// Run processing
+// =========================================================================
+document.getElementById('run-btn').addEventListener('click', async () => {
+  const modelFile     = document.getElementById('model-file').files[0];
+  const videoFile     = document.getElementById('video-file').files[0];
+  const sidecarFile   = document.getElementById('sidecar-file').files[0];
+  const inventoryFile = document.getElementById('inventory-file').files[0];
+  const useVideoGps   = document.getElementById('gps-video').checked;
+
+  if (!modelFile || !videoFile) {
+    alert('Select a YOLO checkpoint and a dashcam video.');
+    return;
+  }
+  if (!useVideoGps && !sidecarFile) {
+    alert('Select a GPS sidecar file, or choose "Extract from video" (requires ExifTool).');
+    return;
+  }
+
+  const runBtn = document.getElementById('run-btn');
+
+  runBtn.disabled = true;
+  runBtn.textContent = 'Uploading files…';
+
+  document.getElementById('progress-section').style.display = '';
+  document.getElementById('log-box').innerHTML = '';
+  document.getElementById('progress-bar').className = '';
+  setProgress(5);
+  appendLog('Uploading files to server…');
+
+  const fd = new FormData();
+  fd.append('model',    modelFile);
+  fd.append('video',    videoFile);
+  if (sidecarFile) fd.append('sidecar', sidecarFile);
+  if (inventoryFile) fd.append('inventory', inventoryFile);
+  fd.append('conf_threshold', document.getElementById('conf-slider').value);
+  fd.append('fps',            document.getElementById('fps-slider').value);
+  fd.append('match_radius',   document.getElementById('radius-slider').value);
+
+  let uploadRes;
+  try {
+    uploadRes = await fetch('/api/process', { method: 'POST', body: fd });
+  } catch (e) {
+    appendLog('Upload failed: ' + e.message, true);
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run Processing';
+    return;
+  }
+
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json().catch(() => ({ error: uploadRes.statusText }));
+    appendLog('Error: ' + (err.error || 'Unknown error'), true);
+    runBtn.disabled = false;
+    runBtn.textContent = 'Run Processing';
+    return;
+  }
+
+  runBtn.textContent = 'Processing…';
+  setProgress(15);
+  appendLog('Files uploaded — processing started…');
+
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/stream');
+
+  let barPct = 15;
+
+  eventSource.onmessage = async (e) => {
+    const evt = JSON.parse(e.data);
+
+    if (evt.type === 'ping') return;
+
+    if (evt.type === 'log') {
+      appendLog(evt.message);
+      barPct = Math.min(barPct + 2, 88);
+      setProgress(barPct);
+    }
+
+    if (evt.type === 'complete') {
+      setProgress(100);
+      appendLog(`Done — ${evt.count} sign clusters detected.`);
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run Processing';
+      eventSource.close();
+
+      const r = await fetch('/api/results');
+      const data = await r.json();
+      clusters = data.clusters;
+      renderMarkers();
+      renderReviewQueue();
+    }
+
+    if (evt.type === 'error') {
+      document.getElementById('progress-bar').className = 'error';
+      appendLog('ERROR: ' + evt.message, true);
+      runBtn.disabled = false;
+      runBtn.textContent = 'Run Processing';
+      eventSource.close();
+    }
+  };
+
+  eventSource.onerror = (e) => {
+    if (eventSource.readyState === EventSource.CLOSED) return;
+    appendLog('Connection to server interrupted.', true);
+  };
+});
+</script>
+</body>
+</html>

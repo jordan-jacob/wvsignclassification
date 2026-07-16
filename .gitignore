@@ -1,7 +1,14 @@
 ﻿data/
-checkpoints/
+# but keep the GitHub Pages demo data (docs/data/) so it deploys
+!docs/data/
 runs/
-checkpoints/*.pt
 .venv/
 .labelstudio-venv/
 *-venv/
+logs/
+sign_mapper/build/
+sign_mapper/dist/
+# Ephemeral runtime artifacts — generated per run, never commit
+sign_mapper/outputs/
+__pycache__/
+*.pyc
