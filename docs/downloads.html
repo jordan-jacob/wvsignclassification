@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>WV Roadway Sign Detection — Downloads</title>
+<title>WV Roadway Sign Detection: Downloads</title>
 <link rel="stylesheet" href="assets/style.css" />
 </head>
 <body>
@@ -22,7 +22,7 @@
 
   <h1>Downloads &amp; Resources</h1>
   <p class="page-lead">
-    Run the Sign Mapper locally, download model checkpoints, and get the annotation dataset.
+    Run the Sign Mapper locally, download model checkpoints, and get the annotation dataset!
   </p>
 
   <!-- ── Run locally (most important action — Item 4) ── -->
@@ -35,18 +35,18 @@ pip install -r requirements.txt
 python app.py</pre>
     <p>Then open <a href="http://localhost:5000" style="color:#3182ce">http://localhost:5000</a> in your browser.</p>
     <p style="margin-top:10px"><strong>Optional: ExifTool (for automatic GPS extraction)</strong><br>
-      Download from <a href="https://exiftool.org/install.html" style="color:#3182ce">exiftool.org</a> and add it to your PATH.
-      Without it, a GPS sidecar file (.srt or .csv) is required.</p>
+      Download from <a href="https://exiftool.org/" style="color:#3182ce">exiftool.org</a> for free and add it to your PATH.
+      Without it, you'll needa GPS sidecar file (.srt or .csv) to run the app.</p>
     <blockquote class="note">
       <strong>Note:</strong> On some systems, use <code>python3</code> instead of <code>python</code>.
-      The first run will download ~2GB of ML dependencies (PyTorch). This is a one-time download.
+      The first run will download about 1-2 GB of python machine learning dependencies. This is a one-time download.
     </blockquote>
   </div>
 
   <!-- ── Model Checkpoints ── -->
   <div class="section-block">
     <h2>Model Checkpoints</h2>
-    <p>Stored in GitHub LFS (~52 MB each).</p>
+    <p>Stored in GitHub LFS (~48 MB each).</p>
 
     <div class="card-grid">
 
@@ -54,15 +54,15 @@ python app.py</pre>
       <div class="download-card">
         <h3>Phase 2 — LISA Fine-tune</h3>
         <p class="card-desc">
-          MTSD-pretrained YOLOv8m fine-tuned on LISA (47 MUTCD classes). General-purpose
-          US sign detector.
+          MTSD-pretrained YOLOv11m fine-tuned on LISA (47 MUTCD classes). This is a general purpose
+          US sign detector, and you are free to build on it.
         </p>
         <dl class="card-meta">
           <dt>File</dt>      <dd><code>phase2_full_best.pt</code></dd>
-          <dt>Architecture</dt><dd>YOLOv8m</dd>
+          <dt>Architecture</dt><dd>YOLOv11m</dd>
           <dt>Classes</dt>   <dd>47 (MUTCD / LISA)</dd>
           <dt>mAP50</dt>     <dd>0.731 (LISA val)</dd>
-          <dt>Size</dt>      <dd>~52 MB</dd>
+          <dt>Size</dt>      <dd>~48 MB</dd>
         </dl>
         <div class="card-actions">
           <a class="btn btn-primary"
@@ -77,15 +77,15 @@ python app.py</pre>
         <h3>Phase 3 — WVDOH Fine-tune</h3>
         <p class="card-desc">
           Phase 2 fine-tuned on annotated WVDOH dashcam frames for the 9 WVDOH GIS
-          categories. Use this checkpoint with the local app.
+          categories. This is my current best model for WV sign detection.
         </p>
         <dl class="card-meta">
           <dt>File</dt>      <dd><code>phase3_wv_augmented_best.pt</code></dd>
-          <dt>Architecture</dt><dd>YOLOv8m</dd>
+          <dt>Architecture</dt><dd>YOLOv11m</dd>
           <dt>Classes</dt>   <dd>9 (WVDOH GIS categories)</dd>
           <dt>mAP50</dt>     <dd>0.818 (WV val)</dd>
           <dt>mAP50-95</dt>  <dd>0.598 (WV val)</dd>
-          <dt>Size</dt>      <dd>~52 MB</dd>
+          <dt>Size</dt>      <dd>~48 MB</dd>
         </dl>
         <div class="card-actions">
           <a class="btn btn-primary"
@@ -98,7 +98,7 @@ python app.py</pre>
     </div>
 
     <p style="margin-top:16px;font-size:12px;color:#718096">
-      Earlier checkpoints are in the
+      Earlier checkpoints can be found in the
       <a href="https://github.com/jordan-jacob/wvsignclassification/tree/main/checkpoints"
          style="color:#3182ce">checkpoints/</a> directory.
     </p>
@@ -108,10 +108,10 @@ python app.py</pre>
   <div class="section-block">
     <h2>Annotation Dataset</h2>
     <div class="download-card" style="max-width:640px">
-      <h3>WVDOH Sign Annotations — Label Studio Export</h3>
+      <h3>WVDOH Sign Annotations: Label Studio Export</h3>
       <p class="card-desc">
-        Bounding-box annotations of WVDOH dashcam frames in YOLO format.
-        22 annotation classes remapped to the 9-class WVDOH taxonomy at data prep time.
+        These are the bounding-box annotations of WVDOH dashcam frames in YOLO format.
+        This datasets contains 22 annotation classes, which are then remapped to the 9-class taxonomy at data prep time.
       </p>
       <dl class="card-meta">
         <dt>Export format</dt> <dd>YOLO (bounding box, normalized)</dd>
@@ -124,12 +124,12 @@ python app.py</pre>
         See
         <a href="https://github.com/jordan-jacob/wvsignclassification/blob/main/docs/assets/labeling_config.xml"
            style="color:#3182ce">labeling_config.xml</a>
-        for the Label Studio config and class colors.
+        for the Label Studio config and class colors I used.
       </p>
     </div>
 
     <div style="margin-top:20px">
-      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Contributing annotations</h3>
+      <h3 style="font-size:14px;font-weight:700;margin-bottom:12px">Process for contributing annotations:</h3>
       <ol class="install-steps">
         <li>Install <a href="https://labelstud.io" style="color:#3182ce">Label Studio</a></li>
         <li>Import the
@@ -139,45 +139,6 @@ python app.py</pre>
         <li>Export as <strong>YOLO format</strong> (File → Export → YOLO)</li>
         <li>Open a pull request adding your export to <code>data/wv_exports_all/</code></li>
       </ol>
-    </div>
-  </div>
-
-  <!-- ── Citation / Contact ── -->
-  <div class="section-block">
-    <h2>Citation &amp; Contact</h2>
-
-    <div class="card-grid">
-      <div class="download-card">
-        <h3>Citation</h3>
-        <p class="card-desc">If you use this work, cite:</p>
-        <pre style="margin-top:8px">@article{wvsigndetection2026,
-  title   = {Automated Roadway Sign Detection and
-             Inventory Reconciliation for West Virginia},
-  author  = {TBD},
-  journal = {TBD},
-  year    = {2026}
-}</pre>
-        <p class="card-desc" style="margin-top:8px;font-size:12px">
-          Citation will be updated upon publication.
-        </p>
-      </div>
-
-      <div class="download-card">
-        <h3>Contact</h3>
-        <p class="card-desc">
-          This project is a collaboration between West Virginia University and
-          the WV Division of Highways (WVDOH).
-        </p>
-        <dl class="card-meta" style="margin-top:8px">
-          <dt>Department</dt><dd>Department of Civil and Environmental Engineering,
-                                 West Virginia University, Morgantown, WV 26506</dd>
-          <dt>Sponsor</dt>    <dd>WV Division of Highways (WVDOH)</dd>
-          <dt>GitHub</dt>    <dd><a href="https://github.com/jordan-jacob/wvsignclassification"
-                                    style="color:#3182ce">jordan-jacob/wvsignclassification</a></dd>
-          <dt>Issues</dt>    <dd><a href="https://github.com/jordan-jacob/wvsignclassification/issues"
-                                    style="color:#3182ce">GitHub Issues</a></dd>
-        </dl>
-      </div>
     </div>
   </div>
 

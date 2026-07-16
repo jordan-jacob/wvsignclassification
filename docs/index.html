@@ -21,9 +21,9 @@
 
 <!-- Demo banner (Item 2a) -->
 <div id="demo-banner">
-  <span>📍 <strong>Demo</strong> — This map shows sign detections from a WVDOH dashcam
-    segment along US-119 in Kanawha County, WV (April 2026). To run the tool on your own
-    video, see the <a href="downloads.html">Downloads</a> page.</span>
+  <span> <strong>Demo Only:</strong> This map shows sign detections from a WVDOH dashcam
+    video that was taken in Charleston, WV in April 2026. To run the tool on your own
+    videos, see the <a href="downloads.html">Downloads</a> page.</span>
   <button id="demo-banner-close" title="Dismiss">✕</button>
 </div>
 
@@ -32,8 +32,7 @@
   <div class="nav-links">
     <a href="index.html" class="active">Map</a>
     <a href="downloads.html">Downloads</a>
-    <a href="qa.html">QA Review</a>
-    <a href="http://localhost:5000" class="local-link" target="_blank" rel="noopener">Local App ↗</a>
+    <a href="http://localhost:5000" class="local-link" target="_blank" rel="noopener">Local App (once started)</a>
   </div>
 </nav>
 
@@ -47,7 +46,7 @@
       <div>
         <h2>Sign Detections</h2>
         <p id="route-subtitle" style="font-size:12px;color:#718096;margin-top:4px">
-          Loading real WVDOH dashcam run…
+          Loading WVDOH dashcam run...
         </p>
       </div>
 
@@ -59,16 +58,16 @@
           <span class="range-val"><span id="fps-val">2</span> fps</span>
         </div>
         <input type="range" id="fps-slider" min="1" max="5" step="0.5" value="2" />
-        <p class="slider-hint">FPS setting applies when processing locally — this demo uses pre-processed detections.</p>
+        <p class="slider-hint">You can use this FPS setting when processing videos locally, but the detections in this demo have already been processed at 2 fps.</p>
         <label class="toggle-row" style="margin-top:10px">
           <input type="checkbox" id="thumb-toggle" /> Detection thumbnails
         </label>
-        <span class="toggle-note">Requires the local app.</span>
+        <span class="toggle-note">Requires the local app!</span>
       </div>
 
       <!-- Model performance (Phase 3, WV val) -->
       <div id="results-panel">
-        <div class="sidebar-label">Model performance — Phase 3 (WV val)</div>
+        <div class="sidebar-label">Model performance: Phase 3 (WV val)</div>
         <table class="results-table">
           <thead>
             <tr><th>Class</th><th>P</th><th>R</th><th>mAP50</th><th>50-95</th></tr>
@@ -77,20 +76,17 @@
             <tr class="overall-row"><td>Overall</td><td>0.814</td><td>0.796</td><td>0.818</td><td>0.598</td></tr>
             <tr><td>Curves</td><td>0.751</td><td>0.722</td><td>0.787</td><td>0.577</td></tr>
             <tr><td>HighwaySymbols</td><td>0.886</td><td>0.749</td><td>0.835</td><td>0.600</td></tr>
-            <tr><td>Informational/Regulatory *</td><td>0.724</td><td>0.686</td><td>0.711</td><td>0.461</td></tr>
+            <tr><td>Informational</td><td>0.733</td><td>0.766</td><td>0.784</td><td>0.538</td></tr>
+            <tr><td>Regulatory</td><td>0.714</td><td>0.606</td><td>0.637</td><td>0.384</td></tr>
             <tr><td>MileMarkers</td><td>0.919</td><td>0.867</td><td>0.858</td><td>0.547</td></tr>
             <tr><td>SpeedLimits</td><td>0.856</td><td>0.877</td><td>0.895</td><td>0.796</td></tr>
-            <tr><td>StopSigns</td><td>0.963</td><td>0.984</td><td class="best">0.992</td><td>0.896</td></tr>
+            <tr><td>StopSigns</td><td>0.963</td><td>0.984</td><td>0.992</td><td>0.896</td></tr>
             <tr><td>TrafficLights</td><td>0.723</td><td>0.849</td><td>0.815</td><td>0.496</td></tr>
             <tr><td>Warnings</td><td>0.779</td><td>0.740</td><td>0.763</td><td>0.546</td></tr>
           </tbody>
         </table>
         <p style="font-size:10px;color:#a0aec0;margin-top:4px">
-          YOLOv8m · 8,156 train / 1,924 val frames · 9 WVDOH GIS categories
-        </p>
-        <p style="font-size:10px;color:#a0aec0;margin-top:2px">
-          * Informational and Regulatory are merged to one label in the map output;
-          the model trains them separately — values shown are the mean of the two.
+          YOLOv11m with 8,156 train / 1,924 val frames across 9 categories
         </p>
       </div>
 
@@ -99,13 +95,13 @@
         <div class="sidebar-label">Load your own GeoJSON</div>
         <div class="drop-zone" id="upload-drop-zone">
           <strong>Drop file here or click to browse</strong>
-          <p>Output from the local Sign Mapper app</p>
+          <p>Output from the local app</p>
           <p style="margin-top:4px;font-size:11px">.geojson / .json</p>
         </div>
         <input type="file" id="geojson-file-input" accept=".geojson,.json"
                style="display:none" />
         <p id="load-status" style="font-size:11px;margin-top:6px;color:#718096">
-          Loading demo data…
+          Loading demo data...
         </p>
       </div>
 
